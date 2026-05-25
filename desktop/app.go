@@ -1,246 +1,96 @@
-package main
+package api
 
 import (
-	"bytes"
-	"context"
+	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
 	"net/http"
-	"os"
-	"os/exec"
-	"strings"
 	"time"
-
-	"golang.zx2c4.com/wireguard/conn"
-	"golang.zx2c4.com/wireguard/device"
-	"golang.zx2c4.com/wireguard/tun"
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
-const (
-	serverIP   = "129.151.146.44"
-	serverPort = "8081"
-)
+const sessionCookieName = "mscale_session"
 
-type App struct {
-	ctx         context.Context
-	stopHeart   chan struct{}
-	assignedIP  string
-	wgEngine    *device.Device
-	tunDevice   tun.Device
-	adapterName string
-	overlayNet  string
+type Session struct {
+	ID        string
+	UserID    string
+	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
-// NewApp creates a new App application struct
-func NewApp() *App {
-	return &App{
-		stopHeart: make(chan struct{}),
+func generateSessionID() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
 	}
+	return hex.EncodeToString(b), nil
 }
 
-// startup is called when the app starts
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-	go a.startHeartbeatLoop()
-}
-
-// shutdown is called when the app closes — stops the heartbeat goroutine cleanly
-func (a *App) shutdown(ctx context.Context) {
-	close(a.stopHeart)
-}
-
-// getHostname returns the machine hostname for peer identification
-func getHostname() string {
-	name, err := os.Hostname()
+func (h *AuthHandler) CreateSession(w http.ResponseWriter, userID string) error {
+	sessionID, err := generateSessionID()
 	if err != nil {
-		return "unknown-peer"
-	}
-	return name
-}
-
-// sendHeartbeat performs the network request to the server
-func (a *App) sendHeartbeat() {
-	url := fmt.Sprintf("http://%s:%s/status/update", serverIP, serverPort)
-
-	payload := map[string]string{
-		"status":  "active",
-		"peer_id": getHostname(),
-	}
-	body, _ := json.Marshal(payload)
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		log.Printf("HEARTBEAT: Failed to build request: %v", err)
-		return
+		return err
 	}
 
-	token := os.Getenv("MSCALE_TOKEN")
-	if token == "" {
-		token = "my-secret-token-123"
-	}
-	req.Header.Set("Authorization", token)
-	req.Header.Set("Content-Type", "application/json")
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("HEARTBEAT: Request failed: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-	log.Printf("HEARTBEAT: Sent — server responded %d", resp.StatusCode)
-}
-
-// startHeartbeatLoop runs in the background every 60s
-// Sends one heartbeat immediately on start, then every 60s
-func (a *App) startHeartbeatLoop() {
-	a.sendHeartbeat() // send immediately on startup
-
-	ticker := time.NewTicker(60 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			a.sendHeartbeat()
-		case <-a.stopHeart:
-			log.Println("HEARTBEAT: Loop stopped")
-			return
-		}
-	}
-}
-
-// ConnectTunnel is called from Javascript
-func (a *App) ConnectTunnel(token string, mode string) string {
-	if token == "" {
-		return "Error: Token cannot be empty"
-	}
-
-	privateKey, err := wgtypes.GeneratePrivateKey()
-	if err != nil {
-		return "Error: Could not generate private key"
-	}
-
-	url := fmt.Sprintf("http://%s:%s/register", serverIP, serverPort)
-	pubKey := privateKey.PublicKey()
-	payload := map[string]string{
-		"public_key": hex.EncodeToString(pubKey[:]),
-	}
-	body, _ := json.Marshal(payload)
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return "Error: Failed to build request"
-	}
-
-	req.Header.Set("Authorization", token)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Sprintf("Error: Could not reach server — %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Sprintf("Error: Server returned %d", resp.StatusCode)
-	}
-
-	respBody, _ := io.ReadAll(resp.Body)
-
-	var peer struct {
-		IP        string `json:"ip"`
-		ServerKey string `json:"server_key"`
-	}
-	if err := json.Unmarshal(respBody, &peer); err != nil {
-		return "Error: Invalid response from server"
-	}
-
-	// Determine routing mode
-	overlayNet := "100.64.0.0/10" // Default to mesh only
-	if mode == "exit-node" {
-		overlayNet = "0.0.0.0/0" // Route all traffic
-	}
-	a.overlayNet = overlayNet
-
-	serverKey, err := wgtypes.ParseKey(strings.TrimSpace(peer.ServerKey))
-	if err != nil {
-		return "Error: Invalid server key"
-	}
-
-	// Create TUN adapter
-	tunDevice, err := tun.CreateTUN("MScale", 1420)
-	if err != nil {
-		return "Error: TUN create failed (run as Administrator)"
-	}
-	a.tunDevice = tunDevice
-
-	adapterName, err := tunDevice.Name()
-	if err != nil {
-		tunDevice.Close()
-		return "Error: get adapter name failed"
-	}
-	a.adapterName = adapterName
-
-	// Configure WireGuard engine
-	logger := device.NewLogger(device.LogLevelError, "[WG] ")
-	wgEngine := device.NewDevice(tunDevice, conn.NewDefaultBind(), logger)
-	a.wgEngine = wgEngine
-
-	wgEndpoint := serverIP + ":51820"
-	wgConfig := fmt.Sprintf(
-		"private_key=%s\npublic_key=%s\nendpoint=%s\nallowed_ip=%s\npersistent_keepalive_interval=25\n",
-		hex.EncodeToString(privateKey[:]),
-		hex.EncodeToString(serverKey[:]),
-		wgEndpoint,
-		overlayNet,
+	_, err = h.DB.Exec(
+		"INSERT INTO user_sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+		sessionID, userID, expiresAt, time.Now(),
 	)
-
-	if err := wgEngine.IpcSet(wgConfig); err != nil {
-		wgEngine.Close()
-		return "Error: WireGuard config failed"
+	if err != nil {
+		return err
 	}
 
-	if err := wgEngine.Up(); err != nil {
-		wgEngine.Close()
-		return "Error: WireGuard up failed"
-	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    sessionID,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   false,
+		Expires:  expiresAt,
+	})
 
-	// Assign IP to adapter
-	exec.Command("netsh", "interface", "ipv4", "set", "address",
-		"name="+adapterName, "static", peer.IP, "255.192.0.0").Run()
-
-	// Add route
-	exec.Command("netsh", "interface", "ipv4", "add", "route",
-		overlayNet, "name="+adapterName, "store=active").Run()
-
-	a.assignedIP = peer.IP
-	return fmt.Sprintf("Assigned IP: %s\nMode: %s\nServer Key: %s", peer.IP, mode, peer.ServerKey)
+	return nil
 }
 
-// DisconnectTunnel is called from Javascript
-func (a *App) DisconnectTunnel() string {
-	if a.wgEngine != nil {
-		a.wgEngine.Down()
-		exec.Command("netsh", "interface", "ipv4", "delete", "route",
-			a.overlayNet, "name="+a.adapterName).Run()
-		a.tunDevice.Close()
-		a.wgEngine = nil
-		a.tunDevice = nil
+func (h *AuthHandler) GetSession(r *http.Request) (*Session, error) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return nil, err
 	}
-	a.assignedIP = ""
-	return "Disconnected"
+
+	var s Session
+	err = h.DB.QueryRow(
+		"SELECT id, user_id, expires_at, created_at FROM user_sessions WHERE id = ?",
+		cookie.Value,
+	).Scan(&s.ID, &s.UserID, &s.ExpiresAt, &s.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	if time.Now().After(s.ExpiresAt) {
+		_, _ = h.DB.Exec("DELETE FROM user_sessions WHERE id = ?", s.ID)
+		return nil, sql.ErrNoRows
+	}
+
+	return &s, nil
 }
 
-// GetStatus returns current connection status to Javascript
-func (a *App) GetStatus() string {
-	if a.assignedIP == "" {
-		return "Disconnected"
+func (h *AuthHandler) ClearSession(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err == nil {
+		_, _ = h.DB.Exec("DELETE FROM user_sessions WHERE id = ?", cookie.Value)
 	}
-	return fmt.Sprintf("Connected — IP: %s", a.assignedIP)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   false,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
 }
