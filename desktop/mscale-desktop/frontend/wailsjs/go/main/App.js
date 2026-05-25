@@ -10,6 +10,10 @@ export function DisconnectTunnel() {
   return window['go']['main']['App']['DisconnectTunnel']();
 }
 
+export function GetLoggedInUser() {
+  return window['go']['main']['App']['GetLoggedInUser']();
+}
+
 export function GetStatus() {
   return window['go']['main']['App']['GetStatus']();
 }
