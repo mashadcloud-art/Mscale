@@ -384,7 +384,8 @@ func (a *App) ConnectTunnel(mode string) string {
 	if err != nil {
 		return "Error: Could not generate private key"
 	}
-	publicKey := privateKey.PublicKey().String()
+	pubKeyBytes := privateKey.PublicKey()
+	publicKey := hex.EncodeToString(pubKeyBytes[:])
 
 	deviceID, err := a.ensureDeviceRecord(mode, publicKey)
 	if err != nil {
