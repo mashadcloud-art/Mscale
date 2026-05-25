@@ -1,0 +1,10 @@
+# Compiled binaries
+*.exe
+*.exe~
+*.dll
+!wintun.dll
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store

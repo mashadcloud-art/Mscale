@@ -1,0 +1,37 @@
+# Compiled binaries
+mscale-server
+mscale-server.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+mscale.db
+
+# Sensitive Keys (CRITICAL)
+*.key
+server-privatekey
+hex-publickey
+wg-client-*.key
+
+# Logs and Temp Files
+*.log
+nohup.out
+cookies.txt
+
+# Backup files
+*.backup
+*.safe
+*.old
+*.before-mvp
+*.save
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
