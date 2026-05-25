@@ -62,18 +62,26 @@ func hexToBase64(hexKey string) (string, error) {
 	return base64.StdEncoding.EncodeToString(raw), nil
 }
 
-func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		authToken := os.Getenv("MSCALE_TOKEN")
-		if authToken == "" {
-			authToken = "my-secret-token-123"
-		}
-		if r.Header.Get("Authorization") != authToken {
+func authMiddleware(authHandler *api.AuthHandler) func(http.HandlerFunc) http.HandlerFunc {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if _, err := authHandler.GetSession(r); err == nil {
+				next(w, r)
+				return
+			}
+			
+			authToken := os.Getenv("MSCALE_TOKEN")
+			if authToken == "" {
+				authToken = "my-secret-token-123"
+			}
+			if r.Header.Get("Authorization") == authToken {
+				next(w, r)
+				return
+			}
+			
 			log.Printf("WARN: Unauthorized request from %s %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
 		}
-		next(w, r)
 	}
 }
 
@@ -292,9 +300,9 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", serveDashboard)
 	mux.HandleFunc("/dashboard", serveDashboard)
-	mux.HandleFunc("/register", authMiddleware(registerHandler))
-	mux.HandleFunc("/status/update", authMiddleware(statusUpdateHandler))
-	mux.HandleFunc("/peers", authMiddleware(peersHandler))
+	mux.HandleFunc("/register", authMiddleware(authHandler)(registerHandler))
+	mux.HandleFunc("/status/update", authMiddleware(authHandler)(statusUpdateHandler))
+	mux.HandleFunc("/peers", authMiddleware(authHandler)(peersHandler))
 	mux.HandleFunc("/health", healthHandler)
 
 	mux.HandleFunc("/api/auth/register", authHandler.Register)
