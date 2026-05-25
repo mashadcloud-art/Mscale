@@ -434,8 +434,8 @@ func (a *App) ConnectTunnel(mode string) string {
 	wgEndpoint := serverIP + ":51820"
 	wgConfig := fmt.Sprintf(
 		"private_key=%s\npublic_key=%s\nendpoint=%s\nallowed_ip=%s\npersistent_keepalive_interval=25\n",
-		privateKey.String(),
-		serverKey.String(),
+		hex.EncodeToString(privateKey[:]),
+		hex.EncodeToString(serverKey[:]),
 		wgEndpoint,
 		overlayNet,
 	)
