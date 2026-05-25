@@ -150,6 +150,15 @@ func (h *AuthHandler) ListDevices(w http.ResponseWriter, r *http.Request) {
 		if lastSeenAt.Valid {
 			s := lastSeenAt.Time.Format(time.RFC3339)
 			d.LastSeenAt = &s
+			
+			// Dynamically determine status based on heartbeat
+			if time.Since(lastSeenAt.Time) > 2*time.Minute {
+				d.Status = "Offline"
+			} else {
+				d.Status = "Online"
+			}
+		} else {
+			d.Status = "Offline"
 		}
 
 		if enID.Valid {
