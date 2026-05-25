@@ -94,8 +94,7 @@
                                     <p class="text-xs text-gray-500 dark:text-gray-400">Signed in as</p>
                                     <p class="text-sm font-semibold truncate text-gray-800 dark:text-gray-100">mashadandhaz@gmail.com</p>
                                 </div>
-                                <div class="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-sm" onclick="alertNotification('Profile Settings coming soon!')">My Profile</div>
-                                <div class="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-sm text-red-600 dark:text-red-400" onclick="alertNotification('Logout Simulation clicked!')">Log Out</div>
+                                <div class="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-sm text-red-600 dark:text-red-400" onclick="logoutUser()">Log Out</div>
                             </div>
                         </div>
                     </nav>
@@ -581,13 +580,25 @@
                     if (profileEmails.length > 0) profileEmails[0].textContent = currentUser.email;
                     
                     const profileIconText = document.querySelector('#profileButton span.text-xs.font-bold');
-                    if (profileIconText) profileIconText.textContent = currentUser.display_name.substring(0, 2).toUpperCase();
+                    if (profileIconText && currentUser.display_name) profileIconText.textContent = currentUser.display_name.substring(0, 2).toUpperCase();
                 } else if (res.status === 401) {
-                    // Redirect to login if not authenticated (assuming a login page exists, or just show error)
-                    alertNotification("Not logged in. Please log in first.");
+                    window.location.href = '/mscale/login.html';
                 }
             } catch (e) {
                 console.error("Failed to fetch user profile", e);
+            }
+        }
+
+        async function logoutUser() {
+            try {
+                const res = await fetch('/mscale/api/auth/logout', { method: 'POST' });
+                if (res.ok) {
+                    window.location.href = '/mscale/login.html';
+                } else {
+                    alertNotification("Logout failed. Please try again.");
+                }
+            } catch (e) {
+                console.error("Logout error", e);
             }
         }
 
