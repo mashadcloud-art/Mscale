@@ -572,7 +572,7 @@
 
         async function fetchUserProfile() {
             try {
-                const res = await fetch('/api/me');
+                const res = await fetch('/mscale/api/me');
                 if (res.ok) {
                     currentUser = await res.json();
                     document.getElementById('user-email-header').textContent = currentUser.email;
@@ -593,7 +593,7 @@
 
         async function fetchDevices() {
             try {
-                const res = await fetch('/api/devices');
+                const res = await fetch('/mscale/api/devices');
                 if (res.ok) {
                     machines = await res.json();
                     renderMachinesTable();
