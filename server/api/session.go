@@ -47,7 +47,7 @@ func (h *AuthHandler) CreateSession(w http.ResponseWriter, userID string) error 
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   true,
+		Secure:   false,
 		Expires:  expiresAt,
 	})
 
@@ -70,6 +70,7 @@ func (h *AuthHandler) GetSession(r *http.Request) (*Session, error) {
 	}
 
 	if time.Now().After(s.ExpiresAt) {
+		_, _ = h.DB.Exec("DELETE FROM user_sessions WHERE id = ?", s.ID)
 		return nil, sql.ErrNoRows
 	}
 
@@ -88,7 +89,7 @@ func (h *AuthHandler) ClearSession(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   true,
+		Secure:   false,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	})
