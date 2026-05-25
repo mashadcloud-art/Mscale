@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>MScale Network</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: white; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        .logo { font-size: 24px; font-weight: bold; display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+        .dot { height: 14px; width: 14px; background-color: #64748b; border-radius: 50%; }
+        .dot.active { background-color: #22c55e; box-shadow: 0 0 10px #22c55e; }
+        .status { color: #94a3b8; margin-bottom: 30px; font-size: 14px; }
+        
+        input[type="password"] { background: #1e293b; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; margin-bottom: 20px; width: 200px; text-align: center; }
+        
+        button { background-color: #38bdf8; color: #0f172a; border: none; padding: 12px 24px; border-radius: 20px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; width: 220px; }
+        button:hover { background-color: #0ea5e9; }
+        button.disconnect { background-color: #ef4444; color: white; }
+        button.disconnect:hover { background-color: #dc2626; }
+        
+        #ip-display { margin-top: 20px; font-family: monospace; color: #38bdf8; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div class="logo"><div class="dot" id="status-dot"></div> MScale</div>
+    <div class="status" id="status-text">Disconnected</div>
+
+    <input type="password" id="token" placeholder="Enter Secure Token" />
+    
+    <select id="routing-mode" style="background: #1e293b; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; margin-bottom: 20px; width: 220px; text-align: center; font-size: 14px;">
+        <option value="mesh">Mesh Network Only</option>
+        <option value="exit-node">Use as Exit Node</option>
+    </select>
+    <button id="toggle-btn" onclick="toggleConnection()">Connect</button>
+
+    <div id="ip-display"></div>
+
+    <script src="./src/main.js"></script>
+</body>
+</html>
