@@ -38,15 +38,21 @@ func getWGServerPublicKey() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func hexKeyToBase64(hexKey string) (string, error) {
-	raw, err := hex.DecodeString(hexKey)
-	if err != nil {
-		return "", fmt.Errorf("invalid hex key: %w", err)
+func normalizeWGPublicKey(key string) (string, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return "", fmt.Errorf("empty public key")
 	}
-	if len(raw) != 32 {
-		return "", fmt.Errorf("key must be exactly 32 bytes, got %d", len(raw))
+
+	if raw, err := base64.StdEncoding.DecodeString(key); err == nil && len(raw) == 32 {
+		return base64.StdEncoding.EncodeToString(raw), nil
 	}
-	return base64.StdEncoding.EncodeToString(raw), nil
+
+	if raw, err := hex.DecodeString(key); err == nil && len(raw) == 32 {
+		return base64.StdEncoding.EncodeToString(raw), nil
+	}
+
+	return "", fmt.Errorf("invalid WireGuard public key format")
 }
 
 func nextOverlayIP() string {
@@ -124,9 +130,9 @@ func (h *AuthHandler) EnrollDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b64Key, err := hexKeyToBase64(publicKey)
+	b64Key, err := normalizeWGPublicKey(publicKey)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "stored public_key is invalid; expected 32-byte hex key"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "stored public_key is invalid"})
 		return
 	}
 
@@ -169,4 +175,3 @@ func (h *AuthHandler) EnrollDevice(w http.ResponseWriter, r *http.Request) {
 		DeviceName: deviceName,
 	})
 }
-
