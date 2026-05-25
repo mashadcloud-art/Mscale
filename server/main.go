@@ -255,6 +255,14 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, `{"status":"ok"}`)
 }
 
+func serveDashboard(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" && r.URL.Path != "/dashboard" {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, "dashboard.html")
+}
+
 func main() {
 	sqlDB, err := db.Open()
 	if err != nil {
@@ -282,6 +290,8 @@ func main() {
 	authHandler := &api.AuthHandler{DB: sqlDB}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", serveDashboard)
+	mux.HandleFunc("/dashboard", serveDashboard)
 	mux.HandleFunc("/register", authMiddleware(registerHandler))
 	mux.HandleFunc("/status/update", authMiddleware(statusUpdateHandler))
 	mux.HandleFunc("/peers", authMiddleware(peersHandler))

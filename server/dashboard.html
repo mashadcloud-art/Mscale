@@ -1,460 +1,858 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
-  <meta charset="UTF-8" />
-  <title>MScale Device Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root {
-      --bg: #0b1020;
-      --bg-soft: #131a2e;
-      --card: #18213a;
-      --card-2: #1e2947;
-      --text: #eef2ff;
-      --muted: #9aa6c5;
-      --line: rgba(255,255,255,0.1);
-      --accent: #60a5fa;
-      --accent-2: #34d399;
-      --warn: #f59e0b;
-      --danger: #f87171;
-      --radius: 18px;
-      --shadow: 0 20px 60px rgba(0,0,0,0.28);
-    }
-
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background:
-        radial-gradient(circle at top right, rgba(96,165,250,0.16), transparent 24%),
-        radial-gradient(circle at top left, rgba(52,211,153,0.10), transparent 20%),
-        var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-    }
-
-    .wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 32px 20px 56px;
-    }
-
-    .hero {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 20px;
-      margin-bottom: 28px;
-      flex-wrap: wrap;
-    }
-
-    .hero h1 {
-      margin: 0 0 8px;
-      font-size: clamp(28px, 4vw, 44px);
-      line-height: 1.05;
-      letter-spacing: -0.03em;
-    }
-
-    .hero p {
-      margin: 0;
-      color: var(--muted);
-      max-width: 62ch;
-      line-height: 1.6;
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-    }
-
-    button {
-      appearance: none;
-      border: 0;
-      background: linear-gradient(180deg, #4f8df6, #3877e3);
-      color: white;
-      padding: 12px 16px;
-      border-radius: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      box-shadow: 0 10px 24px rgba(56,119,227,0.35);
-    }
-
-    button:hover { filter: brightness(1.05); }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      border: 1px solid var(--line);
-      color: var(--muted);
-      background: rgba(255,255,255,0.03);
-      padding: 10px 14px;
-      border-radius: 999px;
-      font-size: 14px;
-    }
-
-    .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--warn);
-      box-shadow: 0 0 0 6px rgba(245,158,11,0.12);
-    }
-
-    .dot.online {
-      background: var(--accent-2);
-      box-shadow: 0 0 0 6px rgba(52,211,153,0.12);
-    }
-
-    .dot.offline {
-      background: var(--danger);
-      box-shadow: 0 0 0 6px rgba(248,113,113,0.12);
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 18px;
-    }
-
-    .card {
-      grid-column: span 6;
-      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 20px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(8px);
-    }
-
-    .card.full {
-      grid-column: 1 / -1;
-    }
-
-    .card h2 {
-      margin: 0 0 16px;
-      font-size: 18px;
-      letter-spacing: -0.02em;
-    }
-
-    .rows {
-      display: grid;
-      gap: 12px;
-    }
-
-    .row {
-      display: grid;
-      grid-template-columns: 180px 1fr;
-      gap: 14px;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-
-    .row:last-child { border-bottom: 0; }
-
-    .label {
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .value {
-      font-weight: 600;
-      word-break: break-word;
-    }
-
-    .subgrid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 14px;
-    }
-
-    .mini {
-      background: var(--card-2);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 16px;
-    }
-
-    .mini .k {
-      color: var(--muted);
-      font-size: 13px;
-      margin-bottom: 8px;
-    }
-
-    .mini .v {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-
-    .error, .loading {
-      margin-top: 18px;
-      padding: 16px 18px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.03);
-      color: var(--muted);
-    }
-
-    .error {
-      color: #fecaca;
-      background: rgba(127,29,29,0.22);
-      border-color: rgba(248,113,113,0.3);
-    }
-
-    .footer-note {
-      margin-top: 18px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    code {
-      color: #dbeafe;
-      background: rgba(255,255,255,0.06);
-      padding: 2px 6px;
-      border-radius: 8px;
-    }
-
-    @media (max-width: 900px) {
-      .card { grid-column: 1 / -1; }
-      .subgrid { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 640px) {
-      .row {
-        grid-template-columns: 1fr;
-        gap: 6px;
-      }
-      .wrap { padding: 22px 14px 40px; }
-      .hero { margin-bottom: 20px; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Console</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar hiding */
+        .scrollbar-none::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-none {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
 </head>
-<body>
-  <div class="wrap">
-    <div class="hero">
-      <div>
-        <h1>MScale Dashboard</h1>
-        <p>
-          This screen shows the current logged-in device and the exit node it is connected to.
-        </p>
-      </div>
+<body class="bg-gray-50 text-gray-900 antialiased min-h-full flex flex-col font-sans transition-colors duration-200 dark:bg-gray-950 dark:text-gray-100" id="body-root">
 
-      <div class="toolbar">
-        <div class="pill">
-          <span id="status-dot" class="dot"></span>
-          <span id="status-text">Checking status…</span>
+    <div id="app" class="flex flex-col min-h-screen">
+        <!-- Top Sticky Header -->
+        <div class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 pt-4 transition-colors">
+            <div class="container mx-auto max-w-7xl px-4 md:px-6 mb-2 md:mb-4">
+                
+                <!-- Main Header Row -->
+                <header class="flex justify-between items-center gap-4" role="banner">
+                    <div class="flex items-center min-w-0 gap-3">
+                        <a href="#" onclick="switchTab('machines')" class="flex items-center min-w-0 gap-3 hover:opacity-85 transition">
+                            <!-- Custom Mesh Icon Grid -->
+                            <svg width="22" height="22" viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg" class="shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true">
+                                <circle opacity="0.3" cx="3.4" cy="3.25" r="2.7" fill="currentColor"></circle>
+                                <circle cx="3.4" cy="11.3" r="2.7" fill="currentColor"></circle>
+                                <circle opacity="0.3" cx="3.4" cy="19.5" r="2.7" fill="currentColor"></circle>
+                                <circle cx="11.5" cy="11.3" r="2.7" fill="currentColor"></circle>
+                                <circle cx="11.5" cy="19.5" r="2.7" fill="currentColor"></circle>
+                                <circle opacity="0.3" cx="11.5" cy="3.25" r="2.7" fill="currentColor"></circle>
+                                <circle opacity="0.3" cx="19.5" cy="3.25" r="2.7" fill="currentColor"></circle>
+                                <circle cx="19.5" cy="11.3" r="2.7" fill="currentColor"></circle>
+                                <circle opacity="0.3" cx="19.5" cy="19.5" r="2.7" fill="currentColor"></circle>
+                            </svg>
+                            <div class="text-lg md:text-xl font-semibold truncate text-gray-900 dark:text-white" id="user-email-header">
+                                mashadandhaz@gmail.com
+                            </div>
+                        </a>
+                        <span class="inline-flex items-center justify-center font-medium text-[11px] border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded px-1.5 py-0.5">Free</span>
+                    </div>
+
+                    <!-- Right Side Controls & Dark Mode -->
+                    <nav class="flex gap-2 md:gap-3 items-center" aria-label="External links">
+                        <!-- Theme Toggle Button -->
+                        <button onclick="toggleDarkMode()" aria-label="Toggle Theme" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center transition" title="Toggle dark/light mode">
+                            <!-- Sun Icon -->
+                            <svg id="sun-icon" class="hidden" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+                            <!-- Moon Icon -->
+                            <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+                        </button>
+                        
+                        <!-- Help Menu -->
+                        <button onclick="openHelpModal()" aria-label="Help menu" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center transition" title="Help and resources">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>
+                        </button>
+
+                        <!-- Profile Dropdown -->
+                        <div class="relative">
+                            <button onclick="toggleProfileDropdown()" class="relative rounded-full focus:outline-none flex items-center" aria-label="User menu" id="profileButton">
+                                <div class="relative shrink-0 rounded-full overflow-hidden w-8 h-8 bg-blue-100 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 flex items-center justify-center">
+                                    <span class="text-xs font-bold text-blue-700 dark:text-blue-300">MH</span>
+                                </div>
+                            </button>
+                            <!-- Dropdown Card -->
+                            <div id="profileDropdown" class="hidden absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-2 z-50">
+                                <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Signed in as</p>
+                                    <p class="text-sm font-semibold truncate text-gray-800 dark:text-gray-100">mashadandhaz@gmail.com</p>
+                                </div>
+                                <div class="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-sm" onclick="alertNotification('Profile Settings coming soon!')">My Profile</div>
+                                <div class="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-sm text-red-600 dark:text-red-400" onclick="alertNotification('Logout Simulation clicked!')">Log Out</div>
+                            </div>
+                        </div>
+                    </nav>
+                </header>
+            </div>
+
+            <!-- Horizontal Tab Navigation Bar -->
+            <div class="relative overflow-x-auto top-px scrollbar-none border-t border-gray-100 dark:border-gray-800">
+                <nav id="nav" class="flex items-center container mx-auto max-w-7xl px-4 md:px-6 whitespace-nowrap">
+                    <!-- Machines Tab -->
+                    <button onclick="switchTab('machines')" id="tab-machines" class="py-3 px-3 flex items-center font-medium text-sm border-b-2 transition duration-150 outline-none border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"></rect><rect width="20" height="8" x="2" y="14" rx="2" ry="2"></rect><line x1="6" x2="6.01" y1="6" y2="6"></line><line x1="6" x2="6.01" y1="18" y2="18"></line></svg>
+                        Machines
+                    </button>
+
+                    <!-- Apps Tab -->
+                    <button onclick="switchTab('apps')" id="tab-apps" class="py-3 px-3 flex items-center font-medium text-sm border-b-2 transition duration-150 outline-none border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"></path><rect x="3" y="14" width="7" height="7" rx="1"></rect><circle cx="17.5" cy="17.5" r="3.5"></circle></svg>
+                        Apps
+                    </button>
+
+                    <!-- Services Tab -->
+                    <button onclick="switchTab('services')" id="tab-services" class="py-3 px-3 flex items-center font-medium text-sm border-b-2 transition duration-150 outline-none border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><circle cx="12" cy="4.5" r="2.5"></circle><path d="m10.2 6.3-3.9 3.9"></path><circle cx="4.5" cy="12" r="2.5"></circle><path d="M7 12h10"></path><circle cx="19.5" cy="12" r="2.5"></circle><path d="m13.8 17.7 3.9-3.9"></path><circle cx="12" cy="19.5" r="2.5"></circle></svg>
+                        Services
+                    </button>
+
+                    <!-- Users Tab -->
+                    <button onclick="switchTab('users')" id="tab-users" class="py-3 px-3 flex items-center font-medium text-sm border-b-2 transition duration-150 outline-none border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                        Users
+                    </button>
+
+                    <!-- Access Controls Tab -->
+                    <button onclick="switchTab('acls')" id="tab-acls" class="py-3 px-3 flex items-center font-medium text-sm border-b-2 transition duration-150 outline-none border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        Access controls
+                    </button>
+
+                    <div class="flex-1"></div>
+
+                    <!-- Resource Hub Link -->
+                    <button onclick="openResourceHub()" class="py-3 px-3 flex items-center font-medium text-sm border-b-2 border-transparent transition duration-150 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg>
+                        Resource hub
+                    </button>
+                </nav>
+            </div>
         </div>
-        <button id="refresh-btn" type="button">Refresh</button>
-      </div>
+
+        <!-- Notification Bar (Dynamic alert replacements) -->
+        <div id="app-notification" class="hidden container mx-auto max-w-7xl px-4 md:px-6 mt-4">
+            <div class="bg-blue-50 dark:bg-blue-950/40 border-l-4 border-blue-500 p-4 rounded-r-lg flex items-start justify-between">
+                <div class="flex items-center space-x-3">
+                    <svg class="text-blue-600 dark:text-blue-400 shrink-0" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="16" y2="12"></line><line x1="12" x2="12.01" y1="8" y2="8"></line></svg>
+                    <span id="notification-text" class="text-sm font-medium text-blue-800 dark:text-blue-300">Welcome to your secure console dashboard.</span>
+                </div>
+                <button onclick="dismissNotification()" class="text-blue-500 hover:text-blue-800 dark:hover:text-blue-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"></line><line x1="6" x2="18" y1="6" y2="18"></line></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Workspace View Container -->
+        <main class="container mx-auto max-w-7xl px-4 md:px-6 py-6 flex-grow">
+            
+            <!-- MACHINES VIEW -->
+            <div id="view-machines" class="space-y-6">
+                <!-- Section Header -->
+                <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h1 class="text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Machines</h1>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Manage the physical or virtual devices connected to your private subnet. 
+                            <a href="https://tailscale.com/kb/manage-devices/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">Learn more</a>
+                        </p>
+                    </div>
+                    <div class="flex gap-2 shrink-0">
+                        <button onclick="openAddDeviceModal()" class="bg-blue-600 dark:bg-blue-500 text-white font-medium text-sm px-4 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 shadow-sm flex items-center gap-1.5 transition">
+                            <span>Add device</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line></svg>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- "Add First Device" Interactive Hero / Banner -->
+                <div id="first-device-banner" class="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50 rounded-xl relative overflow-hidden transition-all duration-300">
+                    <!-- Dismiss Button -->
+                    <button onclick="minimizeBanner()" class="absolute right-3 top-3 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition" aria-label="Minimize block">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" x2="19" y1="12" y2="12"></line></svg>
+                    </button>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 items-center">
+                        <div class="p-6 md:p-8 space-y-4">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300">Quick Start</span>
+                            <h4 class="font-semibold text-lg md:text-xl text-gray-900 dark:text-white">Connect your ecosystem devices</h4>
+                            <p class="text-gray-600 dark:text-gray-400 text-sm max-w-md leading-relaxed">
+                                Experience a zero-config wireguard mesh. Add servers, development laptops, or cloud containers to test the interface dynamically.
+                            </p>
+                            <div class="pt-2 flex flex-wrap gap-2">
+                                <button onclick="openAddDeviceModal()" class="bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 text-white font-medium text-xs px-3.5 py-2 rounded shadow-sm flex items-center gap-1.5 transition">
+                                    Add device
+                                </button>
+                                <button onclick="seedMockDevices()" class="border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 font-medium text-xs px-3.5 py-2 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 transition">
+                                    Simulate Active Network (Add 3 Demo Nodes)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Vector Graphics Container -->
+                        <div class="hidden md:flex justify-end items-center bg-blue-50/20 dark:bg-blue-950/10 h-full p-6 select-none">
+                            <svg width="240" height="150" viewBox="0 0 317 190" fill="none" xmlns="http://www.w3.org/2000/svg" class="opacity-80 dark:opacity-60">
+                                <path d="M253.558 190.158C218.512 190.158 190.116 161.761 190.116 126.716L253.558 126.716L253.558 190.158Z" fill="#93c5fd"/>
+                                <path d="M317 126.716C317 161.761 288.603 190.158 253.558 190.158L253.558 126.716L317 126.716Z" fill="#bfdbfe"/>
+                                <path d="M317 63.2737C317 98.3191 288.603 126.716 253.558 126.716L253.558 63.2737L317 63.2737Z" fill="#3b82f6"/>
+                                <path d="M63.2314 126.716C63.2314 91.6706 91.6281 63.274 126.674 63.274L126.674 126.716L63.2314 126.716Z" fill="#1e3a8a"/>
+                                <rect x="190.116" y="63.2737" width="63.4421" height="63.4421" rx="31.7211" fill="#1e40af"/>
+                                <rect x="126.674" y="63.2737" width="63.4421" height="63.4421" rx="31.7211" fill="#bfdbfe"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Restore Banner Button (shown when minimized) -->
+                <div id="restore-banner-wrapper" class="hidden flex justify-end">
+                    <button onclick="restoreBanner()" class="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg>
+                        Show Quick Start wizard banner
+                    </button>
+                </div>
+
+                <!-- Filter Controls / Search Toolbar -->
+                <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                    <div class="w-full sm:max-w-xl relative flex items-center">
+                        <svg class="absolute left-3 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+                        <input type="text" id="machines-search" oninput="filterMachines()" placeholder="Filter by node name, OS, IP address, user tag..." class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 shadow-sm transition">
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <!-- Dropdown Filter Selection -->
+                        <div class="relative">
+                            <select id="filter-os" onchange="filterMachines()" class="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm rounded-md font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer">
+                                <option value="all">All OS Systems</option>
+                                <option value="linux">Linux</option>
+                                <option value="macos">macOS</option>
+                                <option value="windows">Windows</option>
+                                <option value="ios">iOS / Android</option>
+                            </select>
+                        </div>
+
+                        <!-- Export Button -->
+                        <button onclick="exportCSV()" class="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 p-2 text-sm rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm transition" title="Export device manifest as JSON data">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Dynamic Machines Table/List -->
+                <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden shadow-sm transition">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-left">
+                            <thead class="bg-gray-50 dark:bg-gray-900/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                <tr>
+                                    <th scope="col" class="px-6 py-4">Node Name &amp; Namespace</th>
+                                    <th scope="col" class="px-6 py-4">Device IP Configuration</th>
+                                    <th scope="col" class="px-6 py-4">Operating System</th>
+                                    <th scope="col" class="px-6 py-4">Connected State</th>
+                                    <th scope="col" class="px-6 py-4">Tailscale Agent Version</th>
+                                    <th scope="col" class="px-6 py-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-800 text-sm" id="machines-table-body">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Table Empty State -->
+                    <div id="machines-empty-state" class="hidden py-12 text-center">
+                        <svg class="mx-auto text-gray-300 dark:text-gray-700 mb-3" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><line x1="8" x2="16" y1="12" y2="12"></line></svg>
+                        <h5 class="text-base font-semibold text-gray-800 dark:text-gray-200">No active nodes registered</h5>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 max-w-xs mx-auto mt-1">Try simulating demo nodes or adding a device structure dynamically.</p>
+                        <div class="mt-4">
+                            <button onclick="seedMockDevices()" class="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 hover:bg-blue-200 px-3 py-1.5 rounded-md font-medium transition">Initialize Demo Network</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- APPS VIEW -->
+            <div id="view-apps" class="hidden space-y-6">
+                <header class="border-b border-gray-100 dark:border-gray-800 pb-4">
+                    <h1 class="text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Mesh Applications</h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Expose and integrate applications securely using Tailscale Funnel. Run microservices behind HTTPS without public ports.</p>
+                </header>
+
+                <!-- Grid of Mock Apps -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 shadow-sm flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-950/40 text-green-600 dark:text-green-400 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                            </div>
+                            <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Prometheus Server</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Monitoring &amp; metrics dashboard node scraping local metrics.</p>
+                            <span class="inline-flex text-[11px] font-semibold bg-gray-100 dark:bg-gray-800 px-2.5 py-0.5 rounded text-gray-600 dark:text-gray-300">port: 9090</span>
+                        </div>
+                        <div class="mt-6 pt-4 border-t border-gray-50 dark:border-gray-800 flex justify-between items-center">
+                            <span class="text-xs text-green-600 dark:text-green-400 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Active Funnel</span>
+                            <button onclick="alertNotification('Configuring Funnel metrics...')" class="text-xs text-blue-500 hover:underline">Config</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 shadow-sm flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" x2="15" y1="9" y2="15"></line><line x1="15" x2="9" y1="9" y2="15"></line></svg>
+                            </div>
+                            <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Grafana Dashboards</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Unified telemetry interface accessible over peer-to-peer tunnels securely.</p>
+                            <span class="inline-flex text-[11px] font-semibold bg-gray-100 dark:bg-gray-800 px-2.5 py-0.5 rounded text-gray-600 dark:text-gray-300">port: 3000</span>
+                        </div>
+                        <div class="mt-6 pt-4 border-t border-gray-50 dark:border-gray-800 flex justify-between items-center">
+                            <span class="text-xs text-purple-600 dark:text-purple-400 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-purple-500 inline-block"></span> Local Mesh Only</span>
+                            <button onclick="alertNotification('Sharing dashboard URL...')" class="text-xs text-blue-500 hover:underline">Share link</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 shadow-sm flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" x2="12" y1="22.08" y2="12"></line></svg>
+                            </div>
+                            <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Nextcloud Storage</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Self-hosted cloud storage node connected to backup system clusters.</p>
+                            <span class="inline-flex text-[11px] font-semibold bg-gray-100 dark:bg-gray-800 px-2.5 py-0.5 rounded text-gray-600 dark:text-gray-300">port: 8080</span>
+                        </div>
+                        <div class="mt-6 pt-4 border-t border-gray-50 dark:border-gray-800 flex justify-between items-center">
+                            <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-gray-400 inline-block"></span> Offline / Standby</span>
+                            <button onclick="alertNotification('Starting Nextcloud service node...')" class="text-xs text-blue-500 hover:underline">Wake Up</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SERVICES VIEW -->
+            <div id="view-services" class="hidden space-y-6">
+                <header class="border-b border-gray-100 dark:border-gray-800 pb-4">
+                    <h1 class="text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Active Services</h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Analyze real-time ports, SSH agents, and gateway connections running across the mesh node structure.</p>
+                </header>
+
+                <!-- Mock Table for Services -->
+                <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden shadow-sm">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-left">
+                        <thead class="bg-gray-50 dark:bg-gray-900/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            <tr>
+                                <th class="px-6 py-4">Service</th>
+                                <th class="px-6 py-4">Node Host</th>
+                                <th class="px-6 py-4">Internal Port</th>
+                                <th class="px-6 py-4">Access Level</th>
+                                <th class="px-6 py-4">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-800 text-sm">
+                            <tr>
+                                <td class="px-6 py-4 font-semibold text-gray-900 dark:text-white">SSH Server</td>
+                                <td class="px-6 py-4">production-db-replica</td>
+                                <td class="px-6 py-4 font-mono text-gray-500">22</td>
+                                <td class="px-6 py-4 text-xs"><span class="bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 px-2 py-1 rounded">Strict Admins</span></td>
+                                <td class="px-6 py-4"><span class="text-green-600 flex items-center gap-1.5"><span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Listening</span></td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 font-semibold text-gray-900 dark:text-white">PostgreSQL Cluster</td>
+                                <td class="px-6 py-4">k8s-worker-node-01</td>
+                                <td class="px-6 py-4 font-mono text-gray-500">5432</td>
+                                <td class="px-6 py-4 text-xs"><span class="bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-1 rounded">Dev &amp; Prod Org</span></td>
+                                <td class="px-6 py-4"><span class="text-green-600 flex items-center gap-1.5"><span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Active</span></td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 font-semibold text-gray-900 dark:text-white">Redis Cache</td>
+                                <td class="px-6 py-4">caching-redis-main</td>
+                                <td class="px-6 py-4 font-mono text-gray-500">6379</td>
+                                <td class="px-6 py-4 text-xs"><span class="bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-1 rounded">Internal Loop Only</span></td>
+                                <td class="px-6 py-4"><span class="text-gray-400 flex items-center gap-1.5"><span class="w-1.5 h-1.5 bg-gray-400 rounded-full"></span> Inactive</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- USERS VIEW -->
+            <div id="view-users" class="hidden space-y-6">
+                <header class="border-b border-gray-100 dark:border-gray-800 pb-4 flex justify-between items-center flex-wrap gap-4">
+                    <div>
+                        <h1 class="text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Users</h1>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage user accounts, keys, invitations, and access privileges to this tailnet.</p>
+                    </div>
+                    <button onclick="inviteUserModal()" class="bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium px-4 py-2 rounded-md shadow transition">Invite Member</button>
+                </header>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- User 1 (Admin) -->
+                    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-5 flex items-start space-x-4">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                            MH
+                        </div>
+                        <div class="flex-grow space-y-1">
+                            <h3 class="font-semibold text-gray-900 dark:text-white text-base">mashadandhaz@gmail.com</h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Role: <span class="font-semibold text-gray-700 dark:text-gray-300">Owner / Administrator</span></p>
+                            <p class="text-xs text-gray-500">Last activity: Just now</p>
+                            <div class="pt-2">
+                                <span class="inline-flex text-[10px] bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 px-2 py-0.5 rounded font-medium">Verified Identity</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User 2 (Simulated Invitee) -->
+                    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-5 flex items-start space-x-4">
+                        <div class="w-10 h-10 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold">
+                            JD
+                        </div>
+                        <div class="flex-grow space-y-1">
+                            <h3 class="font-semibold text-gray-900 dark:text-white text-base">john.doe@enterprise-node.io</h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Role: <span class="font-semibold text-gray-700 dark:text-gray-300">Member</span></p>
+                            <p class="text-xs text-gray-500">Last activity: 2 hours ago</p>
+                            <div class="pt-2">
+                                <span class="inline-flex text-[10px] bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-0.5 rounded font-medium">Invited Partner</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACCESS CONTROLS (ACLs) VIEW -->
+            <div id="view-acls" class="hidden space-y-6">
+                <header class="border-b border-gray-100 dark:border-gray-800 pb-4">
+                    <h1 class="text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Access Control Policies</h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Declare fine-grained security policies using Tailscale JSON syntax configurations to govern mesh routing paths.</p>
+                </header>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 space-y-4">
+                        <div class="bg-gray-900 text-gray-300 p-5 rounded-lg font-mono text-xs overflow-x-auto shadow-inner border border-gray-800">
+                            <span class="text-gray-500">// Define aclRules to connect specific tags and users securely</span><br>
+                            {<br>
+                            &nbsp;&nbsp;<span class="text-yellow-400">"acls"</span>: [<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-yellow-400">"action"</span>: <span class="text-green-400">"accept"</span>,<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-yellow-400">"src"</span>: [<span class="text-green-400">"*"</span>],<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-yellow-400">"dst"</span>: [<span class="text-green-400">"*:80"</span>, <span class="text-green-400">"*:443"</span>]<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;},<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-yellow-400">"action"</span>: <span class="text-green-400">"accept"</span>,<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-yellow-400">"src"</span>: [<span class="text-green-400">"tag:admin"</span>],<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-yellow-400">"dst"</span>: [<span class="text-green-400">"*:22"</span>]<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+                            &nbsp;&nbsp;],<br>
+                            &nbsp;&nbsp;<span class="text-yellow-400">"ssh"</span>: [<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-yellow-400">"action"</span>: <span class="text-green-400">"check-routes"</span>,<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-yellow-400">"users"</span>: [<span class="text-green-400">"*"</span>]<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+                            &nbsp;&nbsp;]<br>
+                            }
+                        </div>
+                        <button onclick="alertNotification('Saving active ACL parameters...')" class="bg-blue-600 text-white font-medium text-xs px-4 py-2 rounded hover:bg-blue-700 transition">Save Policy Configuration</button>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-5 rounded-lg shadow-sm">
+                            <h4 class="font-semibold text-gray-900 dark:text-white mb-2">Policy Helper</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                Tailscale policies are default-deny. Define explicitly allow-listed sources (users or dynamic tags) and destination networks/ports to secure traffic routing patterns correctly.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
     </div>
 
-    <div id="loading" class="loading">Loading current device details…</div>
-    <div id="error" class="error" style="display:none;"></div>
-
-    <div id="content" style="display:none;">
-      <div class="grid">
-        <section class="card">
-          <h2>Current Device</h2>
-          <div class="rows">
-            <div class="row"><div class="label">Device name</div><div class="value" id="device_name">—</div></div>
-            <div class="row"><div class="label">Device ID</div><div class="value" id="device_id">—</div></div>
-            <div class="row"><div class="label">Platform</div><div class="value" id="platform">—</div></div>
-            <div class="row"><div class="label">Device type</div><div class="value" id="device_type">—</div></div>
-            <div class="row"><div class="label">OS version</div><div class="value" id="os_version">—</div></div>
-            <div class="row"><div class="label">App version</div><div class="value" id="app_version">—</div></div>
-            <div class="row"><div class="label">Status</div><div class="value" id="device_status">—</div></div>
-            <div class="row"><div class="label">Last seen</div><div class="value" id="last_seen_at">—</div></div>
-          </div>
-        </section>
-
-        <section class="card">
-          <h2>Network</h2>
-          <div class="rows">
-            <div class="row"><div class="label">Overlay IP</div><div class="value" id="overlay_ip">—</div></div>
-            <div class="row"><div class="label">Endpoint IP</div><div class="value" id="endpoint_ip">—</div></div>
-            <div class="row"><div class="label">DNS</div><div class="value" id="current_dns">—</div></div>
-            <div class="row"><div class="label">Tunnel mode</div><div class="value" id="tunnel_mode">—</div></div>
-            <div class="row"><div class="label">Exit node ID</div><div class="value" id="exit_node_id">—</div></div>
-            <div class="row"><div class="label">Public key</div><div class="value" id="public_key">—</div></div>
-          </div>
-        </section>
-
-        <section class="card full">
-          <h2>Exit Node</h2>
-          <div class="subgrid">
-            <div class="mini">
-              <div class="k">Node label</div>
-              <div class="v" id="exit_label">—</div>
+    <!-- ADD DEVICE MODAL -->
+    <div id="modal-add-device" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl max-w-lg w-full overflow-hidden shadow-2xl transition">
+            <div class="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Add a New Device</h3>
+                <button onclick="closeAddDeviceModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"></line><line x1="6" x2="18" y1="6" y2="18"></line></svg>
+                </button>
             </div>
-            <div class="mini">
-              <div class="k">Location</div>
-              <div class="v" id="exit_location">—</div>
-            </div>
-            <div class="mini">
-              <div class="k">Health</div>
-              <div class="v" id="exit_health">—</div>
-            </div>
-          </div>
+            
+            <form onsubmit="handleAddDeviceSubmit(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Hostname / Machine Identifier</label>
+                    <input id="new-device-name" type="text" placeholder="e.g. staging-ubuntu-01" required class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white">
+                </div>
 
-          <div class="rows" style="margin-top:16px;">
-            <div class="row"><div class="label">Exit node ID</div><div class="value" id="exit_id">—</div></div>
-            <div class="row"><div class="label">Owner user ID</div><div class="value" id="exit_owner_user_id">—</div></div>
-            <div class="row"><div class="label">Linked device ID</div><div class="value" id="exit_device_id">—</div></div>
-            <div class="row"><div class="label">Private</div><div class="value" id="exit_private">—</div></div>
-            <div class="row"><div class="label">Enabled</div><div class="value" id="exit_enabled">—</div></div>
-          </div>
-        </section>
-      </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Operating System</label>
+                        <select id="new-device-os" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white">
+                            <option value="Linux">Linux</option>
+                            <option value="macOS">macOS</option>
+                            <option value="Windows">Windows</option>
+                            <option value="iOS">iOS</option>
+                            <option value="Android">Android</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Simulate Status</label>
+                        <select id="new-device-status" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white">
+                            <option value="Online">Online</option>
+                            <option value="Offline">Offline</option>
+                        </select>
+                    </div>
+                </div>
 
-      <div class="footer-note">
-        Data source: <code>/mscale/api/me/device</code>
-      </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Network Segment</label>
+                    <input id="new-device-ip" type="text" placeholder="e.g. 100.84.151.12" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white">
+                    <p class="text-[11px] text-gray-400 mt-1">Leave empty to auto-generate a valid Wireguard overlay dynamic IP address.</p>
+                </div>
+
+                <div class="pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-2">
+                    <button type="button" onclick="closeAddDeviceModal()" class="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded">Add to Mesh</button>
+                </div>
+            </form>
+        </div>
     </div>
-  </div>
 
-  <script>
-    const els = {
-      loading: document.getElementById('loading'),
-      error: document.getElementById('error'),
-      content: document.getElementById('content'),
-      statusDot: document.getElementById('status-dot'),
-      statusText: document.getElementById('status-text'),
-      refreshBtn: document.getElementById('refresh-btn'),
-      device_name: document.getElementById('device_name'),
-      device_id: document.getElementById('device_id'),
-      platform: document.getElementById('platform'),
-      device_type: document.getElementById('device_type'),
-      os_version: document.getElementById('os_version'),
-      app_version: document.getElementById('app_version'),
-      device_status: document.getElementById('device_status'),
-      last_seen_at: document.getElementById('last_seen_at'),
-      overlay_ip: document.getElementById('overlay_ip'),
-      endpoint_ip: document.getElementById('endpoint_ip'),
-      current_dns: document.getElementById('current_dns'),
-      tunnel_mode: document.getElementById('tunnel_mode'),
-      exit_node_id: document.getElementById('exit_node_id'),
-      public_key: document.getElementById('public_key'),
-      exit_label: document.getElementById('exit_label'),
-      exit_location: document.getElementById('exit_location'),
-      exit_health: document.getElementById('exit_health'),
-      exit_id: document.getElementById('exit_id'),
-      exit_owner_user_id: document.getElementById('exit_owner_user_id'),
-      exit_device_id: document.getElementById('exit_device_id'),
-      exit_private: document.getElementById('exit_private'),
-      exit_enabled: document.getElementById('exit_enabled')
-    };
+    <!-- GLOBAL RESOURCE HUB HELP MODAL -->
+    <div id="modal-help" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl max-w-md w-full overflow-hidden shadow-2xl transition">
+            <div class="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Tailscale Resource Hub</h3>
+                <button onclick="closeHelpModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"></line><line x1="6" x2="18" y1="6" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 text-sm text-gray-600 dark:text-gray-300">
+                <p>Welcome to your simulated administrative dashboard control interface.</p>
+                <div class="space-y-2">
+                    <a href="https://tailscale.com/kb/" target="_blank" class="block p-3 rounded-lg border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+                        <span class="font-semibold text-gray-900 dark:text-white block">Official Knowledge Base</span>
+                        <span class="text-xs text-gray-400">Step-by-step implementation guides and best practice workflows.</span>
+                    </a>
+                    <a href="https://tailscale.com/blog/" target="_blank" class="block p-3 rounded-lg border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+                        <span class="font-semibold text-gray-900 dark:text-white block">Tailscale Blog &amp; Releases</span>
+                        <span class="text-xs text-gray-400">Latest structural updates and secure peer-to-peer network announcements.</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    function setText(el, value) {
-      el.textContent = value ?? '—';
-    }
+    <!-- FOOTER STATUS STRIP -->
+    <footer class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-3 text-center text-xs text-gray-400 dark:text-gray-500 transition-colors">
+        <div class="container mx-auto max-w-7xl px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div>© 2026 Admin Tailnet Simulation Console</div>
+            <div class="flex gap-4">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Tailscale Mesh Status: Connected</span>
+            </div>
+        </div>
+    </footer>
 
-    function formatBool(v) {
-      if (v === true) return 'Yes';
-      if (v === false) return 'No';
-      return '—';
-    }
+    <!-- INTERACTION LOGIC & SYSTEM STATE -->
+    <script>
+        // State Management
+        let machines = [];
+        let currentUser = null;
 
-    function setStatus(status) {
-      const s = (status || '').toLowerCase();
-      els.statusDot.className = 'dot';
-      if (s === 'online') {
-        els.statusDot.classList.add('online');
-        els.statusText.textContent = 'Online';
-      } else if (s === 'offline') {
-        els.statusDot.classList.add('offline');
-        els.statusText.textContent = 'Offline';
-      } else {
-        els.statusText.textContent = status || 'Unknown';
-      }
-      setText(els.device_status, status || 'Unknown');
-    }
-
-    function render(data) {
-      const device = data.device || {};
-      const exitNode = data.exit_node || device.exit_node || null;
-
-      setText(els.device_name, device.device_name);
-      setText(els.device_id, device.id);
-      setText(els.platform, device.platform);
-      setText(els.device_type, device.device_type);
-      setText(els.os_version, device.os_version);
-      setText(els.app_version, device.app_version);
-      setText(els.last_seen_at, device.last_seen_at);
-      setText(els.overlay_ip, device.overlay_ip);
-      setText(els.endpoint_ip, device.endpoint_ip);
-      setText(els.current_dns, device.current_dns);
-      setText(els.tunnel_mode, device.tunnel_mode);
-      setText(els.exit_node_id, device.exit_node_id);
-      setText(els.public_key, device.public_key);
-      setStatus(device.status);
-
-      if (exitNode) {
-        setText(els.exit_label, exitNode.label);
-        setText(
-          els.exit_location,
-          [exitNode.city, exitNode.country_code].filter(Boolean).join(', ') || '—'
-        );
-        setText(els.exit_health, exitNode.health_status);
-        setText(els.exit_id, exitNode.id);
-        setText(els.exit_owner_user_id, exitNode.owner_user_id);
-        setText(els.exit_device_id, exitNode.device_id);
-        setText(els.exit_private, formatBool(exitNode.is_private));
-        setText(els.exit_enabled, formatBool(exitNode.is_enabled));
-      } else {
-        setText(els.exit_label, 'Not connected');
-        setText(els.exit_location, '—');
-        setText(els.exit_health, '—');
-        setText(els.exit_id, '—');
-        setText(els.exit_owner_user_id, '—');
-        setText(els.exit_device_id, '—');
-        setText(els.exit_private, '—');
-        setText(els.exit_enabled, '—');
-      }
-
-      els.loading.style.display = 'none';
-      els.error.style.display = 'none';
-      els.content.style.display = 'block';
-    }
-
-    function showError(message) {
-      els.loading.style.display = 'none';
-      els.content.style.display = 'none';
-      els.error.textContent = message;
-      els.error.style.display = 'block';
-      els.statusDot.className = 'dot offline';
-      els.statusText.textContent = 'Unavailable';
-    }
-
-    async function loadDashboard() {
-      els.loading.style.display = 'block';
-      els.error.style.display = 'none';
-
-      try {
-        const response = await fetch('/mscale/api/me/device', {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'Accept': 'application/json'
-          }
-        });
-
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(`HTTP ${response.status} ${response.statusText}${text ? ` — ${text}` : ''}`);
+        async function fetchUserProfile() {
+            try {
+                const res = await fetch('/api/me');
+                if (res.ok) {
+                    currentUser = await res.json();
+                    document.getElementById('user-email-header').textContent = currentUser.email;
+                    
+                    const profileEmails = document.querySelectorAll('#profileDropdown p.text-sm.font-semibold.truncate');
+                    if (profileEmails.length > 0) profileEmails[0].textContent = currentUser.email;
+                    
+                    const profileIconText = document.querySelector('#profileButton span.text-xs.font-bold');
+                    if (profileIconText) profileIconText.textContent = currentUser.display_name.substring(0, 2).toUpperCase();
+                } else if (res.status === 401) {
+                    // Redirect to login if not authenticated (assuming a login page exists, or just show error)
+                    alertNotification("Not logged in. Please log in first.");
+                }
+            } catch (e) {
+                console.error("Failed to fetch user profile", e);
+            }
         }
 
-        const data = await response.json();
-        render(data);
-      } catch (error) {
-        showError(`Failed to load current device details. ${error.message}`);
-      }
-    }
+        async function fetchDevices() {
+            try {
+                const res = await fetch('/api/devices');
+                if (res.ok) {
+                    machines = await res.json();
+                    renderMachinesTable();
+                }
+            } catch (e) {
+                console.error("Failed to fetch devices", e);
+            }
+        }
 
-    els.refreshBtn.addEventListener('click', loadDashboard);
-    loadDashboard();
-  </script>
+        // Dark Mode Logic
+        function toggleDarkMode() {
+            const body = document.getElementById('body-root');
+            const sunIcon = document.getElementById('sun-icon');
+            const moonIcon = document.getElementById('moon-icon');
+            
+            if (body.classList.contains('dark')) {
+                body.classList.remove('dark');
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+            } else {
+                body.classList.add('dark');
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+            }
+        }
+
+        // Active Navigation Router Sim
+        function switchTab(tabName) {
+            // Hide all panel views
+            document.getElementById('view-machines').classList.add('hidden');
+            document.getElementById('view-apps').classList.add('hidden');
+            document.getElementById('view-services').classList.add('hidden');
+            document.getElementById('view-users').classList.add('hidden');
+            document.getElementById('view-acls').classList.add('hidden');
+
+            // De-activate all tab header triggers
+            const tabs = ['machines', 'apps', 'services', 'users', 'acls'];
+            tabs.forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                if (el) {
+                    el.className = "py-3 px-3 flex items-center font-medium text-sm border-b-2 transition duration-150 outline-none border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200";
+                }
+            });
+
+            // Show and Activate target view
+            document.getElementById(`view-${tabName}`).classList.remove('hidden');
+            const activeTab = document.getElementById(`tab-${tabName}`);
+            if (activeTab) {
+                activeTab.className = "py-3 px-3 flex items-center font-medium text-sm border-b-2 transition duration-150 outline-none border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-400";
+            }
+        }
+
+        // Render Table Rows
+        function renderMachinesTable() {
+            const tableBody = document.getElementById('machines-table-body');
+            const emptyState = document.getElementById('machines-empty-state');
+            tableBody.innerHTML = '';
+
+            const searchTerm = document.getElementById('machines-search').value.toLowerCase();
+            const filterOS = document.getElementById('filter-os').value.toLowerCase();
+
+            // Perform Filters
+            const filtered = machines.filter(m => {
+                const name = m.device_name || '';
+                const ip = m.overlay_ip || '';
+                const os = m.platform || '';
+                const matchesSearch = name.toLowerCase().includes(searchTerm) || 
+                                      ip.includes(searchTerm) || 
+                                      os.toLowerCase().includes(searchTerm);
+                const matchesOS = filterOS === 'all' || os.toLowerCase() === filterOS;
+                return matchesSearch && matchesOS;
+            });
+
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            filtered.forEach(m => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors";
+                
+                const statusColor = m.status === 'Online' ? 'bg-green-500' : 'bg-gray-400';
+                const statusTextClass = m.status === 'Online' ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400';
+                
+                const displayIp = m.overlay_ip || m.endpoint_ip || 'No IP assigned';
+                const displayVersion = m.app_version ? `v${m.app_version}` : 'Unknown';
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="font-semibold text-gray-900 dark:text-white">${m.device_name}</div>
+                        <div class="text-xs text-gray-400 dark:text-gray-500">${currentUser ? currentUser.email : m.user_id}</div>
+                    </td>
+                    <td class="px-6 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">
+                        ${displayIp}
+                    </td>
+                    <td class="px-6 py-4 text-xs font-medium text-gray-500 dark:text-gray-400">
+                        ${m.platform}
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="inline-flex items-center gap-1.5 text-xs font-semibold ${statusTextClass}">
+                            <span class="w-2 h-2 rounded-full ${statusColor} inline-block animate-pulse"></span>
+                            ${m.status}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400">
+                        ${displayVersion}
+                    </td>
+                    <td class="px-6 py-4 text-right text-xs">
+                        <button onclick="removeDevice('${m.id}')" class="text-red-500 hover:text-red-700 dark:hover:text-red-400 font-semibold transition" title="Disconnect device from networks">
+                            Disconnect
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // Action Handlers
+        function filterMachines() {
+            renderMachinesTable();
+        }
+
+        function removeDevice(id) {
+            machines = machines.filter(m => m.id !== id);
+            renderMachinesTable();
+            alertNotification("Selected node has been disconnected securely from your tailnet mesh.");
+        }
+
+        function seedMockDevices() {
+            const seed = [
+                { id: Date.now() + 1, name: "cloud-db-eu-west", namespace: "mashadandhaz@gmail.com", ip: "100.67.23.90", os: "Linux", status: "Online", version: "1.60.2" },
+                { id: Date.now() + 2, name: "nas-backup-storage", namespace: "mashadandhaz@gmail.com", ip: "100.99.123.4", os: "Windows", status: "Offline", version: "1.56.0" },
+                { id: Date.now() + 3, name: "haz-mobile-ios", namespace: "mashadandhaz@gmail.com", ip: "100.111.45.88", os: "iOS", status: "Online", version: "1.60.2" }
+            ];
+            machines.push(...seed);
+            renderMachinesTable();
+            alertNotification("Three new telemetry nodes successfully connected into active wireguard interface routes!");
+        }
+
+        // Notification Controls
+        function alertNotification(message) {
+            const notif = document.getElementById('app-notification');
+            const txt = document.getElementById('notification-text');
+            txt.textContent = message;
+            notif.classList.remove('hidden');
+            setTimeout(() => {
+                notif.classList.add('hidden');
+            }, 6000);
+        }
+
+        function dismissNotification() {
+            document.getElementById('app-notification').classList.add('hidden');
+        }
+
+        // Banner Handlers
+        function minimizeBanner() {
+            document.getElementById('first-device-banner').classList.add('hidden');
+            document.getElementById('restore-banner-wrapper').classList.remove('hidden');
+        }
+
+        function restoreBanner() {
+            document.getElementById('first-device-banner').classList.remove('hidden');
+            document.getElementById('restore-banner-wrapper').classList.add('hidden');
+        }
+
+        // Profile Menu Handlers
+        function toggleProfileDropdown() {
+            const menu = document.getElementById('profileDropdown');
+            menu.classList.toggle('hidden');
+        }
+
+        // Modal Views
+        function openAddDeviceModal() {
+            document.getElementById('modal-add-device').classList.remove('hidden');
+        }
+
+        function closeAddDeviceModal() {
+            document.getElementById('modal-add-device').classList.add('hidden');
+        }
+
+        function handleAddDeviceSubmit(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('new-device-name').value;
+            const osInput = document.getElementById('new-device-os').value;
+            const statusInput = document.getElementById('new-device-status').value;
+            let ipInput = document.getElementById('new-device-ip').value;
+
+            if(!ipInput) {
+                // Generate secure custom wireguard IP
+                ipInput = `100.${Math.floor(Math.random() * 50) + 60}.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 250)}`;
+            }
+
+            const newObj = {
+                id: Date.now(),
+                name: nameInput.trim().toLowerCase().replace(/\s+/g, '-'),
+                namespace: "mashadandhaz@gmail.com",
+                ip: ipInput,
+                os: osInput,
+                status: statusInput,
+                version: "1.60.2"
+            };
+
+            machines.unshift(newObj);
+            renderMachinesTable();
+            closeAddDeviceModal();
+            alertNotification(`Device "${newObj.name}" successfully provisioned at ${newObj.ip}`);
+            
+            // reset form fields
+            document.getElementById('new-device-name').value = '';
+            document.getElementById('new-device-ip').value = '';
+        }
+
+        // Help Modal Controls
+        function openHelpModal() {
+            document.getElementById('modal-help').classList.remove('hidden');
+        }
+
+        function closeHelpModal() {
+            document.getElementById('modal-help').classList.add('hidden');
+        }
+
+        function openResourceHub() {
+            openHelpModal();
+        }
+
+        function inviteUserModal() {
+            alertNotification("Integration Invite System generated. Email invitation link created!");
+        }
+
+        // Export JSON Data
+        function exportCSV() {
+            const jsonStr = JSON.stringify(machines, null, 2);
+            const blob = new Blob([jsonStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "tailnet-nodes.json";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            alertNotification("Node manifest downloaded successfully!");
+        }
+
+        // Global Event listener for closing menus
+        window.addEventListener('click', function(e) {
+            const profileBtn = document.getElementById('profileButton');
+            const dropdown = document.getElementById('profileDropdown');
+            if (profileBtn && dropdown && !profileBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.add('hidden');
+            }
+        });
+
+        // Initialize Table
+        window.onload = async function() {
+            await fetchUserProfile();
+            await fetchDevices();
+        };
+    </script>
 </body>
 </html>
-
