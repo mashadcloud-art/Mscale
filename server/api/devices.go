@@ -81,8 +81,8 @@ func (h *AuthHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 
 	var existingID string
 	err = h.DB.QueryRow(
-		"SELECT id FROM devices WHERE public_key = ?",
-		req.PublicKey,
+		"SELECT id FROM devices WHERE user_id = ? AND device_name = ?",
+		session.UserID, req.DeviceName,
 	).Scan(&existingID)
 
 	if err != nil && err != sql.ErrNoRows {
@@ -90,7 +90,21 @@ func (h *AuthHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err == nil {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "device already registered"})
+		writeJSON(w, http.StatusCreated, DeviceResponse{
+			ID:         existingID,
+			UserID:     session.UserID,
+			DeviceName: req.DeviceName,
+			Platform:   req.Platform,
+			DeviceType: req.DeviceType,
+			PublicKey:  req.PublicKey,
+			AppVersion: req.AppVersion,
+			OSVersion:  req.OSVersion,
+			CurrentDNS: req.CurrentDNS,
+			ExitNodeID: req.ExitNodeID,
+			TunnelMode: req.TunnelMode,
+			EndpointIP: req.EndpointIP,
+			Status:     "offline",
+		})
 		return
 	}
 

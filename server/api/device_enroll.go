@@ -106,6 +106,12 @@ func (h *AuthHandler) EnrollDevice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if currentOverlayIP.Valid && currentOverlayIP.String != "" {
+		b64Key, err := normalizeWGPublicKey(publicKey)
+		if err == nil {
+			exec.Command("sudo", "wg", "set", "wg0", "peer", b64Key, "allowed-ips", currentOverlayIP.String+"/32").Run()
+			exec.Command("sudo", "wg-quick", "save", "wg0").Run()
+		}
+
 		serverKey, err := getWGServerPublicKey()
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not get server key"})
