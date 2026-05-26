@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -432,8 +433,8 @@ func (a *App) ConnectTunnel(mode string) string {
 	wgEndpoint := serverIP + ":51820"
 	wgConfig := fmt.Sprintf(
 		"private_key=%s\npublic_key=%s\nendpoint=%s\nallowed_ip=%s\npersistent_keepalive_interval=25\n",
-		privateKey.String(),
-		serverKey.String(),
+		hex.EncodeToString(privateKey[:]),
+		hex.EncodeToString(serverKey[:]),
 		wgEndpoint,
 		overlayNet,
 	)
@@ -464,6 +465,17 @@ func (a *App) ConnectTunnel(mode string) string {
 
 func (a *App) DisconnectTunnel() string {
 	a.stopHeartbeat()
+	
+	if a.deviceID != "" {
+		payload := map[string]string{
+			"status":  "Offline",
+			"peer_id": a.deviceID,
+		}
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", apiURL("/status/update"), bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		a.httpClient.Do(req)
+	}
 
 	if a.wgEngine != nil {
 		a.wgEngine.Down()

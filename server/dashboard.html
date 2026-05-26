@@ -556,7 +556,7 @@
     <!-- FOOTER STATUS STRIP -->
     <footer class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-3 text-center text-xs text-gray-400 dark:text-gray-500 transition-colors">
         <div class="container mx-auto max-w-7xl px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
-            <div>© 2026 Admin Tailnet Simulation Console</div>
+            <div>┬⌐ 2026 Admin Tailnet Simulation Console</div>
             <div class="flex gap-4">
                 <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Tailscale Mesh Status: Connected</span>
             </div>
@@ -602,30 +602,46 @@
             }
         }
 
-        async function fetchDevices() {
-            try {
-                const res = await fetch('/mscale/api/devices');
-                if (res.ok) {
-                    machines = await res.json();
+        function initWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            // Determine base path to accommodate /mscale/ proxies
+            const pathPrefix = window.location.pathname.startsWith('/mscale') ? '/mscale' : '';
+            const wsUrl = `${wsProtocol}//${window.location.host}${pathPrefix}/ws/devices`;
+            
+            const ws = new WebSocket(wsUrl);
+            
+            ws.onmessage = function(event) {
+                try {
+                    machines = JSON.parse(event.data);
                     renderMachinesTable();
+                } catch (e) {
+                    console.error("Failed to parse websocket message", e);
                 }
-            } catch (e) {
-                console.error("Failed to fetch devices", e);
-            }
+            };
+            
+            ws.onclose = function() {
+                console.log("WebSocket disconnected. Reconnecting in 5s...");
+                setTimeout(initWebSocket, 5000);
+            };
+            
+            ws.onerror = function(err) {
+                console.error("WebSocket error:", err);
+            };
         }
 
         // Dark Mode Logic
         function toggleDarkMode() {
-            const body = document.getElementById('body-root');
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            
             const sunIcon = document.getElementById('sun-icon');
             const moonIcon = document.getElementById('moon-icon');
             
-            if (body.classList.contains('dark')) {
-                body.classList.remove('dark');
+            if (!isDark) {
                 sunIcon.classList.add('hidden');
                 moonIcon.classList.remove('hidden');
             } else {
-                body.classList.add('dark');
                 sunIcon.classList.remove('hidden');
                 moonIcon.classList.add('hidden');
             }

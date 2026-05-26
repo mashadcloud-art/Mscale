@@ -25,7 +25,8 @@
     <div class="logo"><div class="dot" id="status-dot"></div> MScale</div>
     <div class="status" id="status-text">Disconnected</div>
 
-    <input type="password" id="token" placeholder="Enter Secure Token" />
+    <input type="email" id="email" placeholder="Email address" style="background: #1e293b; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; margin-bottom: 10px; width: 200px; text-align: center;" />
+    <input type="password" id="password" placeholder="Password" style="background: #1e293b; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; margin-bottom: 20px; width: 200px; text-align: center;" />
     
     <select id="routing-mode" style="background: #1e293b; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; margin-bottom: 20px; width: 220px; text-align: center; font-size: 14px;">
         <option value="mesh">Mesh Network Only</option>
@@ -35,6 +36,6 @@
 
     <div id="ip-display"></div>
 
-    <script src="./src/main.js"></script>
+    <script type="module" src="./src/main.js"></script>
 </body>
 </html>

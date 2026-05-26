@@ -182,39 +182,46 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func statusUpdateHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
+func statusUpdateHandler(authHandler *api.AuthHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
 
-	var payload struct {
-		PeerID string `json:"peer_id"`
-		Status string `json:"status"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if payload.PeerID == "" {
-		http.Error(w, "Missing peer_id", http.StatusBadRequest)
-		return
-	}
-	if payload.Status == "" {
-		payload.Status = "active"
-	}
+		var payload struct {
+			PeerID string `json:"peer_id"`
+			Status string `json:"status"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if payload.PeerID == "" {
+			http.Error(w, "Missing peer_id", http.StatusBadRequest)
+			return
+		}
+		if payload.Status == "" || strings.ToLower(payload.Status) == "active" {
+			payload.Status = "Online"
+		}
 
-	mu.Lock()
-	peerStatuses[payload.PeerID] = PeerStatus{
-		PeerID:   payload.PeerID,
-		Status:   payload.Status,
-		LastSeen: time.Now(),
-	}
-	mu.Unlock()
+		_, err := authHandler.DB.Exec("UPDATE devices SET status = ?, last_seen_at = CURRENT_TIMESTAMP WHERE id = ?", payload.Status, payload.PeerID)
+		if err != nil {
+			log.Printf("ERROR updating DB for heartbeat: %v", err)
+		}
 
-	log.Printf("HEARTBEAT: peer_id=%s status=%s from %s", payload.PeerID, payload.Status, r.RemoteAddr)
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintln(w, `{"received": true}`)
+		mu.Lock()
+		peerStatuses[payload.PeerID] = PeerStatus{
+			PeerID:   payload.PeerID,
+			Status:   payload.Status,
+			LastSeen: time.Now(),
+		}
+		mu.Unlock()
+
+		log.Printf("HEARTBEAT: peer_id=%s status=%s from %s", payload.PeerID, payload.Status, r.RemoteAddr)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"received": true}`)
+	}
 }
 
 func peersHandler(w http.ResponseWriter, r *http.Request) {
@@ -301,7 +308,7 @@ func main() {
 	mux.HandleFunc("/", serveDashboard)
 	mux.HandleFunc("/dashboard", serveDashboard)
 	mux.HandleFunc("/register", authMiddleware(authHandler)(registerHandler))
-	mux.HandleFunc("/status/update", authMiddleware(authHandler)(statusUpdateHandler))
+	mux.HandleFunc("/status/update", authMiddleware(authHandler)(statusUpdateHandler(authHandler)))
 	mux.HandleFunc("/peers", authMiddleware(authHandler)(peersHandler))
 	mux.HandleFunc("/health", healthHandler)
 
