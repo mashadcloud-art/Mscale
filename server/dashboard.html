@@ -863,6 +863,7 @@
         window.onload = async function() {
             await fetchUserProfile();
             await fetchDevices();
+            setInterval(fetchDevices, 2000);
         };
     </script>
 </body>
