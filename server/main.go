@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"mscale-server/api"
 	"mscale-server/db"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -163,9 +165,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if out, err := exec.Command("sudo", "wg-quick", "save", "wg0").CombinedOutput(); err != nil {
-		log.Printf("WARN: wg-quick save failed: %v | %s", err, string(out))
-	}
+	// Do not wg-quick save here — persisting a bad peer AllowedIPs (e.g. 0.0.0.0/0) breaks SSH.
 
 	serverPubKey, err := getServerPublicKey()
 	if err != nil {
@@ -201,11 +201,16 @@ func statusUpdateHandler(authHandler *api.AuthHandler) http.HandlerFunc {
 			http.Error(w, "Missing peer_id", http.StatusBadRequest)
 			return
 		}
-		if payload.Status == "" || strings.ToLower(payload.Status) == "active" {
-			payload.Status = "Online"
-		}
+		payload.Status = api.NormalizeDeviceDBStatus(payload.Status)
 
-		_, err := authHandler.DB.Exec("UPDATE devices SET status = ?, last_seen_at = CURRENT_TIMESTAMP WHERE id = ?", payload.Status, payload.PeerID)
+		clientIP := r.RemoteAddr
+		if host, _, splitErr := net.SplitHostPort(r.RemoteAddr); splitErr == nil {
+			clientIP = host
+		}
+		_, err := authHandler.DB.Exec(
+			"UPDATE devices SET status = ?, last_seen_at = CURRENT_TIMESTAMP, endpoint_ip = COALESCE(NULLIF(?, ''), endpoint_ip) WHERE id = ?",
+			payload.Status, clientIP, payload.PeerID,
+		)
 		if err != nil {
 			log.Printf("ERROR updating DB for heartbeat: %v", err)
 		}
@@ -217,6 +222,8 @@ func statusUpdateHandler(authHandler *api.AuthHandler) http.HandlerFunc {
 			LastSeen: time.Now(),
 		}
 		mu.Unlock()
+
+		api.NotifyDevicesChanged()
 
 		log.Printf("HEARTBEAT: peer_id=%s status=%s from %s", payload.PeerID, payload.Status, r.RemoteAddr)
 		w.Header().Set("Content-Type", "application/json")
@@ -278,6 +285,25 @@ func serveDashboard(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "dashboard.html")
 }
 
+func watchDeviceHeartbeats(sqlDB *sql.DB) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		_, err := sqlDB.Exec(`
+			UPDATE devices
+			SET status = 'offline'
+			WHERE LOWER(status) != 'offline'
+			AND last_seen_at < datetime('now', '-90 seconds')
+		`)
+		if err != nil {
+			log.Println("ERROR: Heartbeat watcher:", err)
+			continue
+		}
+		api.NotifyDevicesChanged()
+	}
+}
+
 func main() {
 	sqlDB, err := db.Open()
 	if err != nil {
@@ -296,6 +322,7 @@ func main() {
 		log.Fatalf("CRITICAL: wg0 not running.\nStart with:\n  sudo wg-quick up wg0\n\nError: %v", err)
 	}
 	log.Printf("INFO: wg0 is up. Server public key: %s", serverKey)
+	api.RestoreHubExitRoutes(sqlDB)
 
 	port := os.Getenv("MSCALE_PORT")
 	if port == "" {
@@ -303,6 +330,11 @@ func main() {
 	}
 
 	authHandler := &api.AuthHandler{DB: sqlDB}
+	api.DevicesChanged = hub.BroadcastDevices
+
+	hub.db = sqlDB
+	go hub.Run()
+	go watchDeviceHeartbeats(sqlDB)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", serveDashboard)
@@ -315,6 +347,11 @@ func main() {
 	mux.HandleFunc("/api/auth/register", authHandler.Register)
 	mux.HandleFunc("/api/auth/login", authHandler.Login)
 	mux.HandleFunc("/api/auth/logout", authHandler.Logout)
+	mux.HandleFunc("/api/auth/google/login", authHandler.LoginGoogleInit)
+	mux.HandleFunc("/api/auth/google/callback", authHandler.LoginGoogleCallback)
+	mux.HandleFunc("/api/auth/google/status", authHandler.CheckLoginStatus)
+	mux.HandleFunc("/api/auth/bridge-token", authHandler.CreateBridgeToken)
+	mux.HandleFunc("/api/auth/bridge", authHandler.BridgeLogin)
 	mux.HandleFunc("/api/me", authHandler.Me)
 	mux.HandleFunc("/api/me/device", authHandler.MeDevice)
 
@@ -323,9 +360,16 @@ func main() {
 	mux.HandleFunc("/api/devices/enroll", authHandler.EnrollDevice)
 	mux.HandleFunc("/api/devices/update-key", authHandler.UpdateDevicePublicKey)
 	mux.HandleFunc("/api/devices/update-meta", authHandler.UpdateDeviceMeta)
+	mux.HandleFunc("/api/exit-nodes", authHandler.ListExitNodes)
+	mux.HandleFunc("/api/devices/exit-node/enable", authHandler.EnableExitNode)
+	mux.HandleFunc("/api/devices/exit-node/disable", authHandler.DisableExitNode)
+	mux.HandleFunc("/api/exit-route/activate", authHandler.ActivateExitRoute)
+	mux.HandleFunc("/api/exit-route/deactivate", authHandler.DeactivateExitRoute)
+	mux.HandleFunc("/api/exit-route/ensure-by-key", authHandler.EnsureExitRouteByKey)
+	mux.HandleFunc("/ws/devices", WsHandler(authHandler))
 
 	log.Printf("INFO: MScale server listening on :%s", port)
-	log.Printf("INFO: Routes: POST /register | POST /status/update | GET /peers | GET /health | POST /api/auth/register | POST /api/auth/login | POST /api/auth/logout | GET /api/me | GET /api/me/device | POST /api/devices/register | GET /api/devices | POST /api/devices/enroll | POST /api/devices/update-key | POST /api/devices/update-meta")
+	log.Printf("INFO: Routes: POST /register | POST /status/update | GET /peers | GET /health | WS /ws/devices | POST /api/auth/register | POST /api/auth/login | POST /api/auth/logout | GET /api/me | GET /api/me/device | POST /api/devices/register | GET /api/devices | POST /api/devices/enroll | POST /api/devices/update-key | POST /api/devices/update-meta")
 	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
 

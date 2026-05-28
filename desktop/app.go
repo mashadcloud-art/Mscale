@@ -11,6 +11,7 @@ import (
 	"net/http/cookiejar"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -133,6 +134,34 @@ func getHostname() string {
 	return name
 }
 
+func getSystemDNS() string {
+	out, err := exec.Command("powershell", "-NoProfile", "-Command",
+		"(Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object { $_.ServerAddresses } | Select-Object -ExpandProperty ServerAddresses | Select-Object -Unique) -join ', '").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+type savedDeviceState struct {
+	DeviceID   string `json:"device_id"`
+	DeviceName string `json:"device_name"`
+}
+
+func deviceStatePath() string {
+	dir := filepath.Join(os.Getenv("LOCALAPPDATA"), "mscale")
+	_ = os.MkdirAll(dir, 0o700)
+	return filepath.Join(dir, "device.json")
+}
+
+func saveDeviceID(hostname, deviceID string) {
+	if deviceID == "" {
+		return
+	}
+	body, _ := json.Marshal(savedDeviceState{DeviceID: deviceID, DeviceName: hostname})
+	_ = os.WriteFile(deviceStatePath(), body, 0o600)
+}
+
 func apiURL(path string) string {
 	return fmt.Sprintf("http://%s:%s%s", serverIP, serverPort, path)
 }
@@ -231,6 +260,7 @@ func (a *App) ensureDeviceRecord(mode string, publicKey string) (string, error) 
 		PublicKey:  publicKey,
 		AppVersion: "0.1.0",
 		OSVersion:  "windows",
+		CurrentDNS: getSystemDNS(),
 		TunnelMode: mode,
 		EndpointIP: serverIP,
 	}
@@ -248,11 +278,16 @@ func (a *App) ensureDeviceRecord(mode string, publicKey string) (string, error) 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusCreated {
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		body, _ := io.ReadAll(resp.Body)
 		var out deviceRegisterResponse
-		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-			return "", fmt.Errorf("invalid register response")
+		if err := json.Unmarshal(body, &out); err != nil {
+			return "", fmt.Errorf("invalid register response: %w", err)
 		}
+		if out.ID == "" {
+			return "", fmt.Errorf("register response missing device id")
+		}
+		saveDeviceID(a.deviceName, out.ID)
 		return out.ID, nil
 	}
 
@@ -320,7 +355,7 @@ func (a *App) sendHeartbeat() {
 	}
 
 	payload := map[string]string{
-		"status":  "active",
+		"status":  "online",
 		"peer_id": a.deviceID,
 	}
 	body, _ := json.Marshal(payload)
@@ -392,6 +427,7 @@ func (a *App) ConnectTunnel(mode string) string {
 		return "Error: device registration failed — " + err.Error()
 	}
 	a.deviceID = deviceID
+	saveDeviceID(a.deviceName, deviceID)
 
 	if err := a.updateDevicePublicKey(deviceID, publicKey); err != nil {
 		return "Error: public key update failed — " + err.Error()
@@ -468,13 +504,18 @@ func (a *App) DisconnectTunnel() string {
 	
 	if a.deviceID != "" {
 		payload := map[string]string{
-			"status":  "Offline",
+			"status":  "offline",
 			"peer_id": a.deviceID,
 		}
 		body, _ := json.Marshal(payload)
-		req, _ := http.NewRequest("POST", apiURL("/status/update"), bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-		a.httpClient.Do(req)
+		req, err := http.NewRequest("POST", apiURL("/status/update"), bytes.NewBuffer(body))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := a.httpClient.Do(req)
+			if err == nil {
+				resp.Body.Close()
+			}
+		}
 	}
 
 	if a.wgEngine != nil {

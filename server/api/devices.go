@@ -81,7 +81,7 @@ func (h *AuthHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 
 	var existingID string
 	err = h.DB.QueryRow(
-		"SELECT id FROM devices WHERE user_id = ? AND device_name = ?",
+		"SELECT id FROM devices WHERE user_id = ? AND LOWER(device_name) = LOWER(?) ORDER BY enrolled_at DESC LIMIT 1",
 		session.UserID, req.DeviceName,
 	).Scan(&existingID)
 
@@ -90,6 +90,19 @@ func (h *AuthHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err == nil {
+		_, _ = h.DB.Exec(
+			`UPDATE devices SET platform = ?, device_type = ?, public_key = ?, app_version = ?, os_version = ?,
+			 current_dns = ?, exit_node_id = ?, tunnel_mode = ?, endpoint_ip = ?
+			 WHERE id = ? AND user_id = ?`,
+			req.Platform, req.DeviceType, req.PublicKey, req.AppVersion, req.OSVersion,
+			req.CurrentDNS, req.ExitNodeID, req.TunnelMode, req.EndpointIP,
+			existingID, session.UserID,
+		)
+		_, _ = h.DB.Exec(
+			"DELETE FROM devices WHERE user_id = ? AND LOWER(device_name) = LOWER(?) AND id != ?",
+			session.UserID, req.DeviceName, existingID,
+		)
+		NotifyDevicesChanged()
 		writeJSON(w, http.StatusCreated, DeviceResponse{
 			ID:         existingID,
 			UserID:     session.UserID,

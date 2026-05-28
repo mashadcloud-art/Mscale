@@ -1,0 +1,14 @@
+[Unit]
+Description=MScale Linux mesh exit node agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/mscale/agent.env
+ExecStart=/usr/local/bin/mscale-agent -email ${MSCALE_EMAIL} -password ${MSCALE_PASSWORD} -name ${MSCALE_DEVICE_NAME} -country ${MSCALE_COUNTRY}
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

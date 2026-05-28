@@ -1,81 +1,694 @@
+﻿import { WindowMinimise, Quit } from '../wailsjs/runtime/runtime.js';
+
 let isConnected = false;
+let actionBusy = false;
+let currentMode = "mesh";
+let currentExitNodeID = "";
 
-window.loginUser = function () {
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    const btn = document.querySelector('#login-section button');
-    const statusText = document.getElementById('status-text');
-    const statusDot = document.getElementById('status-dot');
-    const ipDisplay = document.getElementById('ip-display');
+const video = document.getElementById('bg-video');
+const loginView = document.getElementById('login-section');
+const vpnView = document.getElementById('vpn-section');
+const loginBtn = document.getElementById('login-btn');
+const loginFormPanel = document.getElementById('login-form-panel');
+const loginLoadingState = document.getElementById('login-loading-state');
+const loginErrorBanner = document.getElementById('login-error-banner');
+const loginErrorText = document.getElementById('login-error-text');
+const connectBtn = document.getElementById('connect-btn');
+const btnInner = document.getElementById('btn-inner');
+const btnOuter = document.getElementById('btn-outer');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+const networkStats = document.getElementById('network-stats');
+const statIp = document.getElementById('stat-ip');
 
-    if (!email || !password) {
-        alert("Please enter both email and password.");
+const REMEMBER_EMAIL_KEY = 'mscale_remember_email';
+const SAVED_EMAIL_KEY = 'mscale_saved_email';
+
+function accountInitials(name) {
+    const parts = (name || 'Account').trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return (parts[0] || 'A').slice(0, 2).toUpperCase();
+}
+
+function accountHue(email) {
+    let hash = 0;
+    for (let i = 0; i < email.length; i++) {
+        hash = email.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hues = [221, 248, 271, 199, 168, 328, 142];
+    return hues[Math.abs(hash) % hues.length];
+}
+
+function displayNameOnly(label) {
+    if (!label) return '';
+    const idx = label.indexOf(' (');
+    if (idx > 0) return label.slice(0, idx);
+    if (label.includes('@')) return label.split('@')[0].replace(/[._-]/g, ' ');
+    return label;
+}
+
+function updateLoginScrollFade() {
+    const shell = document.getElementById('login-section');
+    const scroller = document.getElementById('login-scroll');
+    if (!shell || !scroller) return;
+
+    const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+    shell.classList.toggle('can-scroll-up', scroller.scrollTop > 8);
+    shell.classList.toggle('can-scroll-down', maxScroll > 8 && scroller.scrollTop < maxScroll - 8);
+}
+
+function initLoginScrollFade() {
+    const scroller = document.getElementById('login-scroll');
+    if (!scroller) return;
+    scroller.addEventListener('scroll', updateLoginScrollFade, { passive: true });
+    window.addEventListener('resize', updateLoginScrollFade);
+    setTimeout(updateLoginScrollFade, 100);
+}
+
+function showLoginError(msg) {
+    if (loginErrorBanner && loginErrorText) {
+        loginErrorText.innerText = msg;
+        loginErrorBanner.classList.remove('hidden');
+    } else {
+        alert(msg);
+    }
+}
+
+function hideLoginError() {
+    loginErrorBanner?.classList.add('hidden');
+}
+
+function playVideo(src) {
+    if (video) {
+        video.src = src;
+        video.play().catch(() => {});
+    }
+}
+
+function resetVpnConnectionUI() {
+    isConnected = false;
+    connectBtn?.classList.remove('disconnect', 'connected');
+    btnInner?.classList.remove('connected');
+    btnOuter?.classList.remove('connected-ring');
+    if (statusText) statusText.innerText = 'Disconnected';
+    statusDot?.classList.remove('active');
+    networkStats?.classList.add('opacity-30', 'h-0', 'translate-y-2', 'pointer-events-none');
+    networkStats?.classList.remove('opacity-100', 'h-auto', 'translate-y-0', 'mb-6');
+    if (statIp) statIp.innerText = '—';
+    const statProto = document.getElementById('stat-proto');
+    if (statProto) statProto.innerText = '—';
+    const badge = document.getElementById('status-badge');
+    if (badge) {
+        badge.innerText = 'Ready';
+        badge.classList.remove('connected-badge');
+    }
+}
+
+function applyConnectedUI(status) {
+    isConnected = true;
+    connectBtn?.classList.add('disconnect', 'connected');
+    btnInner?.classList.add('connected');
+    btnOuter?.classList.add('connected-ring');
+    statusDot?.classList.add('active');
+
+    let displayStatus = status;
+    if (status.includes('|')) {
+        const parts = status.split('|');
+        const userPart = displayNameOnly(parts.slice(1).join('|').trim());
+        displayStatus = `${parts[0].trim()} | ${userPart}`;
+    }
+    if (statusText) statusText.innerText = displayStatus;
+
+    const ipMatch = status.match(/IP:\s*([^\s|]+)/i);
+    if (statIp && ipMatch) statIp.innerText = ipMatch[1];
+    const statProto = document.getElementById('stat-proto');
+    if (statProto) statProto.innerText = 'WireGuard';
+
+    networkStats?.classList.remove('opacity-30', 'h-0', 'translate-y-2', 'pointer-events-none');
+    networkStats?.classList.add('opacity-100', 'h-auto', 'translate-y-0', 'mb-6');
+
+    const badge = document.getElementById('status-badge');
+    if (badge) {
+        badge.innerText = 'Connected';
+        badge.classList.add('connected-badge');
+    }
+
+    playVideo('/videos/Connected.mp4');
+}
+
+async function restoreVpnState() {
+    if (!window.go?.main?.App?.GetStatus) return;
+    try {
+        const status = await window.go.main.App.GetStatus();
+        if (status.startsWith('Connected') || status.startsWith('Logged in')) {
+            showVpnAfterLogin(false);
+        }
+        if (status.startsWith('Connected')) {
+            applyConnectedUI(status);
+        }
+    } catch (_) {}
+}
+
+function scheduleRestoreVpnState() {
+    restoreVpnState();
+    setTimeout(restoreVpnState, 300);
+}
+
+function showVpnAfterLogin(playLoginVideo = true) {
+    loginView?.classList.add('hidden');
+    vpnView?.classList.remove('hidden');
+    if (playLoginVideo && !isConnected) {
+        playVideo('/videos/login.mp4');
+    }
+    loadExitNodes();
+
+    if (window.go?.main?.App?.GetLoggedInUser) {
+        window.go.main.App.GetLoggedInUser().then(user => {
+            const el = document.getElementById('logged-in-user');
+            if (el) el.innerText = displayNameOnly(user);
+        }).catch(() => {});
+    }
+}
+
+function showLoginView() {
+    closeAdminConsole(false);
+    vpnView?.classList.add('hidden');
+    loginView?.classList.remove('hidden');
+    loginFormPanel?.classList.remove('hidden');
+    loginLoadingState?.classList.add('hidden');
+    loginLoadingState?.classList.remove('flex');
+    resetVpnConnectionUI();
+    playVideo('/videos/login.mp4');
+    loadSavedAccounts();
+    setTimeout(updateLoginScrollFade, 50);
+}
+
+function cancelLogin() {
+    loginLoadingState?.classList.add('hidden');
+    loginLoadingState?.classList.remove('flex');
+    loginFormPanel?.classList.remove('hidden');
+}
+
+function setVpnActionsBusy(busy) {
+    document.querySelectorAll('[data-vpn-action]').forEach(el => {
+        el.classList.toggle('action-busy', busy);
+    });
+}
+
+function runBackgroundCleanup(task) {
+    Promise.resolve().then(task).catch(err => console.error(err));
+}
+
+function saveRememberEmail(email) {
+    const remember = document.getElementById('remember-me')?.checked;
+    if (remember && email) {
+        localStorage.setItem(REMEMBER_EMAIL_KEY, '1');
+        localStorage.setItem(SAVED_EMAIL_KEY, email);
+    } else {
+        localStorage.removeItem(REMEMBER_EMAIL_KEY);
+        localStorage.removeItem(SAVED_EMAIL_KEY);
+    }
+}
+
+function restoreRememberEmail() {
+    if (localStorage.getItem(REMEMBER_EMAIL_KEY) === '1') {
+        const email = localStorage.getItem(SAVED_EMAIL_KEY) || '';
+        const emailInput = document.getElementById('email');
+        const remember = document.getElementById('remember-me');
+        if (emailInput && email) emailInput.value = email;
+        if (remember) remember.checked = true;
+    }
+}
+
+async function loadSavedAccounts() {
+    const panel = document.getElementById('saved-accounts-panel');
+    const list = document.getElementById('saved-accounts-list');
+    if (!panel || !list || !window.go?.main?.App?.ListSavedAccountsJSON) {
+        panel?.classList.add('hidden');
         return;
     }
 
-    btn.innerText = "Logging in...";
+    try {
+        const jsonStr = await window.go.main.App.ListSavedAccountsJSON();
+        const accounts = JSON.parse(jsonStr || '[]');
+        if (!accounts.length) {
+            panel.classList.add('hidden');
+            list.innerHTML = '';
+            return;
+        }
+
+        panel.classList.remove('hidden');
+        list.innerHTML = accounts.map(acct => {
+            const name = displayNameOnly(acct.display_name || acct.email);
+            const initials = accountInitials(name);
+            const hue = accountHue(acct.email);
+            const safeEmail = acct.email.replace(/'/g, "\\'");
+            return `
+                <div class="account-chip group relative">
+                    <button type="button" onclick="switchToAccount('${safeEmail}')" title="${acct.email}"
+                        class="flex flex-col items-center gap-1.5 w-[4.75rem] focus:outline-none">
+                        <div class="w-11 h-11 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md ring-2 ring-white dark:ring-gray-950 group-hover:scale-105 transition-transform duration-200"
+                            style="background: linear-gradient(135deg, hsl(${hue} 78% 52%), hsl(${(hue + 28) % 360} 72% 42%));">
+                            ${initials}
+                        </div>
+                        <span class="text-[10px] font-semibold text-gray-700 dark:text-gray-300 max-w-[4.75rem] truncate text-center leading-tight">${name}</span>
+                    </button>
+                    <button type="button" onclick="event.stopPropagation(); removeSavedAccount('${safeEmail}')" title="Remove ${name}"
+                        class="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-400 hover:text-red-500 hover:border-red-300 opacity-0 group-hover:opacity-100 transition shadow-sm leading-none">
+                        ×
+                    </button>
+                </div>`;
+        }).join('');
+        setTimeout(updateLoginScrollFade, 50);
+    } catch (_) {
+        panel?.classList.add('hidden');
+    }
+}
+
+window.showNewAccountForm = function () {
+    hideLoginError();
+    document.getElementById('email')?.focus();
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    if (emailInput) emailInput.value = '';
+    if (passwordInput) passwordInput.value = '';
+};
+
+window.switchToAccount = async function (email) {
+    if (actionBusy) return;
+    hideLoginError();
+    if (!window.go?.main?.App?.SwitchAccount) {
+        showLoginError('Account switching requires the desktop backend.');
+        return;
+    }
+
+    actionBusy = true;
+    setVpnActionsBusy(true);
+    loginFormPanel?.classList.add('hidden');
+    loginLoadingState?.classList.remove('hidden');
+    loginLoadingState?.classList.add('flex');
+
+    const wasConnected = isConnected;
+    if (wasConnected) {
+        resetVpnConnectionUI();
+        runBackgroundCleanup(() => window.go.main.App.DisconnectTunnel());
+    }
+
+    try {
+        const result = await window.go.main.App.SwitchAccount(email);
+        if (result.startsWith('Success')) {
+            window.go.main.App.PrepareAdminSession?.().catch(() => {});
+            showVpnAfterLogin();
+        } else {
+            showLoginView();
+            const emailInput = document.getElementById('email');
+            if (emailInput) emailInput.value = email;
+            showLoginError(result.replace(/^Error:\s*/, ''));
+        }
+    } catch (err) {
+        showLoginView();
+        showLoginError('Could not switch account: ' + err);
+    } finally {
+        actionBusy = false;
+        setVpnActionsBusy(false);
+        cancelLogin();
+    }
+};
+
+window.removeSavedAccount = async function (email) {
+    if (!window.go?.main?.App?.RemoveSavedAccount) return;
+    try {
+        await window.go.main.App.RemoveSavedAccount(email);
+        await loadSavedAccounts();
+    } catch (_) {}
+};
+
+window.loginUser = function () {
+    const email = document.getElementById('email')?.value?.trim();
+    const password = document.getElementById('password')?.value || '';
+    if (!email || !password) {
+        showLoginError('Please enter email and password.');
+        return;
+    }
+    hideLoginError();
+    if (loginBtn) loginBtn.disabled = true;
 
     window.go.main.App.Login(email, password).then(result => {
-        if (result.startsWith("Success")) {
-            document.getElementById('login-section').style.display = 'none';
-            document.getElementById('vpn-section').style.display = 'flex';
-
-            statusText.innerText = result.replace("Success: ", "");
-            statusDot.classList.remove("active");
-            ipDisplay.innerText = "";
+        if (loginBtn) loginBtn.disabled = false;
+        if (result.startsWith('Success')) {
+            saveRememberEmail(email);
+            window.go.main.App.PrepareAdminSession?.().catch(() => {});
+            loadSavedAccounts();
+            showVpnAfterLogin();
         } else {
-            alert(result);
-            btn.innerText = "Login";
+            showLoginError(result.replace(/^Error:\s*/, ''));
+            cancelLogin();
         }
     }).catch(err => {
-        alert("Login failed: " + err);
-        btn.innerText = "Login";
+        if (loginBtn) loginBtn.disabled = false;
+        showLoginError('Login failed: ' + err);
+        cancelLogin();
+    });
+};
+
+window.loginWithGoogle = function () {
+    loginFormPanel?.classList.add('hidden');
+    loginLoadingState?.classList.remove('hidden');
+    loginLoadingState?.classList.add('flex');
+    hideLoginError();
+
+    if (!window.go?.main?.App?.LoginWithGoogle) {
+        showLoginError('Google sign-in requires the desktop backend.');
+        cancelLogin();
+        return;
+    }
+
+    window.go.main.App.LoginWithGoogle().then(result => {
+        if (result.startsWith('Success')) {
+            window.go.main.App.PrepareAdminSession?.().catch(() => {});
+            loadSavedAccounts();
+            showVpnAfterLogin();
+        } else {
+            showLoginError(result.replace(/^Error:\s*/, ''));
+            cancelLogin();
+        }
+    }).catch(err => {
+        showLoginError('Google login failed: ' + err);
+        cancelLogin();
+    });
+};
+
+window.logoutUser = function () {
+    if (actionBusy) return;
+    actionBusy = true;
+    setVpnActionsBusy(true);
+
+    const wasConnected = isConnected;
+    showLoginView();
+
+    runBackgroundCleanup(async () => {
+        try {
+            if (wasConnected && window.go?.main?.App?.DisconnectTunnel) {
+                await window.go.main.App.DisconnectTunnel();
+            }
+            if (window.go?.main?.App?.Logout) {
+                await window.go.main.App.Logout();
+            }
+        } finally {
+            actionBusy = false;
+            setVpnActionsBusy(false);
+        }
+    });
+};
+
+window.switchAccountFromVpn = function () {
+    if (actionBusy) return;
+    actionBusy = true;
+    setVpnActionsBusy(true);
+
+    const wasConnected = isConnected;
+    showLoginView();
+
+    runBackgroundCleanup(async () => {
+        try {
+            if (wasConnected && window.go?.main?.App?.DisconnectTunnel) {
+                await window.go.main.App.DisconnectTunnel();
+            }
+            if (window.go?.main?.App?.Logout) {
+                await window.go.main.App.Logout();
+            }
+        } finally {
+            actionBusy = false;
+            setVpnActionsBusy(false);
+        }
     });
 };
 
 window.toggleConnection = function () {
-    const btn = document.getElementById('toggle-btn');
-    const statusText = document.getElementById('status-text');
-    const statusDot = document.getElementById('status-dot');
-    const ipDisplay = document.getElementById('ip-display');
-    const mode = document.getElementById('routing-mode').value;
+    if (actionBusy) return;
 
     if (!isConnected) {
-        btn.innerText = "Connecting...";
+        actionBusy = true;
+        connectBtn?.classList.add('action-busy');
+        if (statusText) statusText.innerText = 'Connecting...';
 
-        window.go.main.App.ConnectTunnel(mode).then(result => {
-            if (result.startsWith("Error")) {
+        window.go.main.App.ConnectTunnel(currentMode, currentExitNodeID).then(result => {
+            if (result.startsWith('Error')) {
                 alert(result);
-                btn.innerText = "Connect";
+                if (statusText) statusText.innerText = 'Disconnected';
             } else {
-                isConnected = true;
-                btn.innerText = "Disconnect";
-                btn.classList.add("disconnect");
-                statusDot.classList.add("active");
-                ipDisplay.innerText = result;
+                applyConnectedUI(result.split('\n')[0].startsWith('Assigned IP:')
+                    ? `Connected — IP: ${result.split('\n')[0].replace('Assigned IP: ', '')}`
+                    : 'Connected');
 
                 window.go.main.App.GetStatus().then(status => {
-                    statusText.innerText = status;
-                }).catch(() => {
-                    statusText.innerText = mode === "exit-node"
-                        ? "Connected (Exit Node Active)"
-                        : "Connected (Mesh Only)";
-                });
+                    if (status.startsWith('Connected')) {
+                        applyConnectedUI(status);
+                    } else if (statusText) {
+                        statusText.innerText = status;
+                    }
+                }).catch(() => {});
             }
         }).catch(err => {
-            alert("Connection failed: " + err);
-            btn.innerText = "Connect";
+            alert('Connection failed: ' + err);
+            if (statusText) statusText.innerText = 'Disconnected';
+        }).finally(() => {
+            actionBusy = false;
+            connectBtn?.classList.remove('action-busy');
         });
     } else {
-        window.go.main.App.DisconnectTunnel().then(() => {
-            isConnected = false;
-            btn.innerText = "Connect";
-            btn.classList.remove("disconnect");
-            statusText.innerText = "Disconnected";
-            statusDot.classList.remove("active");
-            ipDisplay.innerText = "";
-        }).catch(err => {
-            alert("Disconnect failed: " + err);
+        actionBusy = true;
+        if (statusText) statusText.innerText = 'Disconnecting...';
+        resetVpnConnectionUI();
+        playVideo('/videos/login.mp4');
+
+        window.go.main.App.DisconnectTunnel().catch(err => {
+            alert('Disconnect failed: ' + err);
+        }).finally(() => {
+            actionBusy = false;
+            if (statusText) statusText.innerText = 'Disconnected';
         });
     }
 };
+
+window.openModal = function (id) {
+    const modal = document.getElementById(id);
+    const backdrop = document.getElementById('modal-backdrop');
+    if (!modal || !backdrop) return;
+    backdrop.classList.remove('hidden');
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        backdrop.classList.remove('opacity-0');
+        modal.classList.remove('opacity-0', 'translate-y-full', 'translate-x-full');
+    }, 10);
+};
+
+window.closeModal = function (id) {
+    const modal = document.getElementById(id);
+    const backdrop = document.getElementById('modal-backdrop');
+    if (!modal) return;
+    modal.classList.add('opacity-0');
+    if (id === 'location-modal') modal.classList.add('translate-y-full');
+    if (id === 'settings-modal') modal.classList.add('translate-x-full');
+
+    if (backdrop) backdrop.classList.add('opacity-0');
+
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        if (backdrop) backdrop.classList.add('hidden');
+    }, 300);
+};
+
+window.closeAllModals = function () {
+    ['location-modal', 'settings-modal', 'logs-modal'].forEach(id => {
+        window.closeModal(id);
+    });
+};
+
+window.selectRoutingMode = function (mode, name) {
+    currentMode = mode;
+    const activeLocationText = document.getElementById('active-location');
+    if (activeLocationText) activeLocationText.innerText = name;
+
+    const container = document.getElementById('exit-nodes-container');
+    if (mode === 'exit-via') {
+        container?.classList.remove('hidden');
+    } else {
+        container?.classList.add('hidden');
+        window.closeModal('location-modal');
+    }
+};
+
+let allNodes = [];
+window.loadExitNodes = async function () {
+    try {
+        if (window.go?.main?.App?.ListExitNodesJSON) {
+            const jsonStr = await window.go.main.App.ListExitNodesJSON();
+            allNodes = JSON.parse(jsonStr);
+            if (allNodes.length > 0 && allNodes[0]._error) {
+                console.error('Exit node load error:', allNodes[0]._error);
+                allNodes = [];
+            }
+            renderNodes(allNodes);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+};
+
+window.filterExitNodes = function () {
+    const term = (document.getElementById('exit-node-search')?.value || '').toLowerCase();
+    const filtered = allNodes.filter(n =>
+        (n.label && n.label.toLowerCase().includes(term)) ||
+        (n.device_name && n.device_name.toLowerCase().includes(term))
+    );
+    renderNodes(filtered);
+};
+
+function renderNodes(nodes) {
+    const list = document.getElementById('exit-nodes-list');
+    if (!list) return;
+    if (!nodes || nodes.length === 0) {
+        list.innerHTML = '<div class="text-center py-4 text-xs text-gray-400">No exit nodes available.</div>';
+        return;
+    }
+    let html = '';
+    for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const label = n.label || n.device_name;
+        html += `<div onclick="selectExitNode('${n.id}', '${label.replace(/'/g, "\\'")}')" class="p-3 rounded-xl border border-gray-150 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition">`;
+        html += `<p class="text-sm font-bold text-gray-900 dark:text-white">${label}</p>`;
+        html += `<p class="text-[10px] text-emerald-500 mt-1">${n.status}</p>`;
+        html += '</div>';
+    }
+    list.innerHTML = html;
+}
+
+window.selectExitNode = function (id, label) {
+    currentExitNodeID = id;
+    const activeLocationText = document.getElementById('active-location');
+    if (activeLocationText) activeLocationText.innerText = label;
+    window.closeModal('location-modal');
+};
+
+window.openAdminConsole = async function () {
+    const overlay = document.getElementById('admin-overlay');
+    const frame = document.getElementById('admin-frame');
+    const loading = document.getElementById('admin-loading');
+    if (!overlay || !frame) return;
+
+    if (!window.go?.main?.App?.IsLoggedIn) {
+        alert('Please sign in to the app first.');
+        return;
+    }
+
+    try {
+        const loggedIn = await window.go.main.App.IsLoggedIn();
+        if (!loggedIn) {
+            alert('Session expired. Please sign in again.');
+            showLoginView();
+            return;
+        }
+    } catch (_) {}
+
+    loading?.classList.remove('hidden');
+    overlay.classList.remove('hidden');
+    overlay.classList.add('open', 'flex');
+
+    frame.onload = () => {
+        loading?.classList.add('hidden');
+    };
+
+    // Local admin uses the same Go session — no second login.
+    frame.src = '/admin.html?embedded=1&t=' + Date.now();
+};
+
+window.closeAdminConsole = function (restore = true) {
+    const overlay = document.getElementById('admin-overlay');
+    const frame = document.getElementById('admin-frame');
+    const loading = document.getElementById('admin-loading');
+    if (!overlay || overlay.classList.contains('hidden')) return;
+
+    overlay.classList.add('hidden');
+    overlay.classList.remove('open', 'flex');
+    if (frame) frame.src = 'about:blank';
+    loading?.classList.remove('hidden');
+    if (restore) {
+        scheduleRestoreVpnState();
+    }
+};
+
+function applyTheme(dark) {
+    document.documentElement.classList.toggle('dark', dark);
+    document.getElementById('sun-icon')?.classList.toggle('hidden', !dark);
+    document.getElementById('moon-icon')?.classList.toggle('hidden', dark);
+    localStorage.setItem('mscale_theme', dark ? 'dark' : 'light');
+}
+
+function initTheme() {
+    const saved = localStorage.getItem('mscale_theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(saved ? saved === 'dark' : prefersDark);
+}
+
+function initAdminRpcBridge() {
+    window.addEventListener('message', async (event) => {
+        const data = event.data;
+        if (!data || data.type !== 'mscale-admin-rpc') return;
+
+        const frame = document.getElementById('admin-frame');
+        if (!frame?.contentWindow || event.source !== frame.contentWindow) return;
+
+        const { id, method, args = [] } = data;
+        const reply = (payload) => {
+            try {
+                frame.contentWindow.postMessage({ type: 'mscale-admin-rpc-result', id, ...payload }, '*');
+            } catch (_) {}
+        };
+
+        try {
+            const app = window.go?.main?.App;
+            if (!app || typeof app[method] !== 'function') {
+                reply({ error: 'Method not available: ' + method });
+                return;
+            }
+            const result = await app[method](...args);
+            reply({ result });
+        } catch (err) {
+            reply({ error: String(err) });
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    initAdminRpcBridge();
+    restoreRememberEmail();
+    loadSavedAccounts();
+    initLoginScrollFade();
+
+    document.getElementById('btn-minimize')?.addEventListener('click', () => {
+        WindowMinimise();
+    });
+
+    document.getElementById('btn-close')?.addEventListener('click', () => {
+        Quit();
+    });
+
+    document.getElementById('btn-theme')?.addEventListener('click', () => {
+        const dark = !document.documentElement.classList.contains('dark');
+        applyTheme(dark);
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeAdminConsole();
+        }
+    });
+
+    if (window.go?.main?.App?.GetStatus) {
+        scheduleRestoreVpnState();
+    }
+});

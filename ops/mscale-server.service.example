@@ -1,0 +1,15 @@
+[Unit]
+Description=MScale API server
+After=network-online.target wg-quick@wg0.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/mscale-server
+ExecStart=/home/ubuntu/mscale-server/mscale-server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

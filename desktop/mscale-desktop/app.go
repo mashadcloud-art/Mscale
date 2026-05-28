@@ -3,26 +3,23 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
-	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun"
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 const (
 	serverIP   = "129.151.146.44"
 	serverPort = "8081"
+	adminConsoleURL = "https://mashad.shop/mscale"
 )
 
 type App struct {
@@ -34,7 +31,9 @@ type App struct {
 	deviceID     string
 	deviceName   string
 	overlayNet   string
-	loggedInUser string
+	exitGatewayIP string
+	loggedInUser     string
+	currentUserEmail string
 
 	wgEngine    *device.Device
 	tunDevice   tun.Device
@@ -112,6 +111,7 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.tryRestoreSession()
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -194,7 +194,7 @@ func (a *App) Login(email string, password string) string {
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return fmt.Sprintf("Error: Could not reach server — %v", err)
+		return fmt.Sprintf("Error: Could not reach server Ã¢â‚¬â€ %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -205,16 +205,12 @@ func (a *App) Login(email string, password string) string {
 	me, err := a.fetchMe()
 	if err != nil {
 		a.loggedInUser = ""
+		a.currentUserEmail = ""
 		return "Error: Login succeeded but session was not saved — " + err.Error()
 	}
 
-	if strings.TrimSpace(me.DisplayName) != "" {
-		a.loggedInUser = me.DisplayName + " (" + me.Email + ")"
-	} else if strings.TrimSpace(me.Email) != "" {
-		a.loggedInUser = me.Email
-	} else {
-		a.loggedInUser = me.UserID
-	}
+	a.setLoggedInFromMe(me)
+	a.persistSessionAfterLogin(me)
 
 	return "Success: Logged in as " + a.loggedInUser
 }
@@ -223,96 +219,11 @@ func (a *App) GetLoggedInUser() string {
 	return a.loggedInUser
 }
 
-func (a *App) ensureDeviceRecord(mode string, publicKey string) (string, error) {
-	payload := deviceRegisterRequest{
-		DeviceName: a.deviceName,
-		Platform:   "windows",
-		DeviceType: "desktop",
-		PublicKey:  publicKey,
-		AppVersion: "0.1.0",
-		OSVersion:  "windows",
-		TunnelMode: mode,
-		EndpointIP: serverIP,
-	}
-	body, _ := json.Marshal(payload)
 
-	req, err := http.NewRequest("POST", apiURL("/api/devices/register"), bytes.NewBuffer(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusCreated {
-		var out deviceRegisterResponse
-		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-			return "", fmt.Errorf("invalid register response")
-		}
-		return out.ID, nil
-	}
 
-	return "", fmt.Errorf(parseAPIError(resp))
-}
 
-func (a *App) updateDevicePublicKey(deviceID string, publicKey string) error {
-	payload := updateKeyRequest{
-		DeviceID:  deviceID,
-		PublicKey: publicKey,
-	}
-	body, _ := json.Marshal(payload)
-
-	req, err := http.NewRequest("POST", apiURL("/api/devices/update-key"), bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(parseAPIError(resp))
-	}
-
-	return nil
-}
-
-func (a *App) enrollDevice(deviceID string) (*enrollResponse, error) {
-	payload := enrollRequest{
-		DeviceID: deviceID,
-	}
-	body, _ := json.Marshal(payload)
-
-	req, err := http.NewRequest("POST", apiURL("/api/devices/enroll"), bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(parseAPIError(resp))
-	}
-
-	var out enrollResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("invalid enroll response")
-	}
-	return &out, nil
-}
 
 func (a *App) sendHeartbeat() {
 	if a.deviceID == "" {
@@ -370,127 +281,8 @@ func (a *App) stopHeartbeat() {
 	}
 }
 
-func (a *App) ConnectTunnel(mode string) string {
-	me, err := a.fetchMe()
-	if err != nil {
-		return "Error: You are not logged in — " + err.Error()
-	}
-	if strings.TrimSpace(me.DisplayName) != "" {
-		a.loggedInUser = me.DisplayName + " (" + me.Email + ")"
-	} else if strings.TrimSpace(me.Email) != "" {
-		a.loggedInUser = me.Email
-	}
 
-	privateKey, err := wgtypes.GeneratePrivateKey()
-	if err != nil {
-		return "Error: Could not generate private key"
-	}
-	pubKeyBytes := privateKey.PublicKey()
-	publicKey := hex.EncodeToString(pubKeyBytes[:])
 
-	deviceID, err := a.ensureDeviceRecord(mode, publicKey)
-	if err != nil {
-		return "Error: device registration failed — " + err.Error()
-	}
-	a.deviceID = deviceID
 
-	if err := a.updateDevicePublicKey(deviceID, publicKey); err != nil {
-		return "Error: public key update failed — " + err.Error()
-	}
 
-	enroll, err := a.enrollDevice(deviceID)
-	if err != nil {
-		return "Error: device enrollment failed — " + err.Error()
-	}
 
-	overlayNet := "100.64.0.0/10"
-	if mode == "exit-node" {
-		overlayNet = "0.0.0.0/0"
-	}
-	a.overlayNet = overlayNet
-
-	serverKey, err := wgtypes.ParseKey(strings.TrimSpace(enroll.ServerKey))
-	if err != nil {
-		return "Error: Invalid server key"
-	}
-
-	tunDevice, err := tun.CreateTUN("MScale", 1420)
-	if err != nil {
-		return "Error: TUN create failed (run as Administrator)"
-	}
-	a.tunDevice = tunDevice
-
-	adapterName, err := tunDevice.Name()
-	if err != nil {
-		tunDevice.Close()
-		return "Error: get adapter name failed"
-	}
-	a.adapterName = adapterName
-
-	logger := device.NewLogger(device.LogLevelError, "[WG] ")
-	wgEngine := device.NewDevice(tunDevice, conn.NewDefaultBind(), logger)
-	a.wgEngine = wgEngine
-
-	wgEndpoint := serverIP + ":51820"
-	wgConfig := fmt.Sprintf(
-		"private_key=%s\npublic_key=%s\nendpoint=%s\nallowed_ip=%s\npersistent_keepalive_interval=25\n",
-		hex.EncodeToString(privateKey[:]),
-		hex.EncodeToString(serverKey[:]),
-		wgEndpoint,
-		overlayNet,
-	)
-
-	if err := wgEngine.IpcSet(wgConfig); err != nil {
-		wgEngine.Close()
-		a.wgEngine = nil
-		return "Error: WireGuard config failed — " + err.Error()
-	}
-
-	if err := wgEngine.Up(); err != nil {
-		wgEngine.Close()
-		a.wgEngine = nil
-		return "Error: WireGuard up failed — " + err.Error()
-	}
-
-	exec.Command("netsh", "interface", "ipv4", "set", "address",
-		"name="+adapterName, "static", enroll.OverlayIP, "255.192.0.0").Run()
-
-	exec.Command("netsh", "interface", "ipv4", "add", "route",
-		overlayNet, "name="+adapterName, "store=active").Run()
-
-	a.assignedIP = enroll.OverlayIP
-	a.startHeartbeatLoop()
-
-	return fmt.Sprintf("Assigned IP: %s\nMode: %s\nLogged in as: %s", enroll.OverlayIP, mode, a.loggedInUser)
-}
-
-func (a *App) DisconnectTunnel() string {
-	a.stopHeartbeat()
-
-	if a.wgEngine != nil {
-		a.wgEngine.Down()
-		exec.Command("netsh", "interface", "ipv4", "delete", "route",
-			a.overlayNet, "name="+a.adapterName).Run()
-		a.wgEngine.Close()
-		a.wgEngine = nil
-	}
-
-	if a.tunDevice != nil {
-		a.tunDevice.Close()
-		a.tunDevice = nil
-	}
-
-	a.assignedIP = ""
-	a.deviceID = ""
-	return "Disconnected"
-}
-
-func (a *App) GetStatus() string {
-	if a.assignedIP == "" {
-		if a.loggedInUser != "" {
-			return "Logged in as: " + a.loggedInUser
-		}
-		return "Disconnected"
-	}
-	return fmt.Sprintf("Connected — IP: %s | %s", a.assignedIP, a.loggedInUser)
-}

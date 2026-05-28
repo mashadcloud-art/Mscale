@@ -1,0 +1,6 @@
+# /etc/sudoers.d/mscale-hub — passwordless hub VPN ops for ubuntu user
+ubuntu ALL=(root) NOPASSWD: /usr/bin/wg
+ubuntu ALL=(root) NOPASSWD: /usr/bin/wg-quick
+ubuntu ALL=(root) NOPASSWD: /usr/sbin/ip
+ubuntu ALL=(root) NOPASSWD: /usr/sbin/iptables
+ubuntu ALL=(root) NOPASSWD: /usr/sbin/sysctl

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -43,6 +44,13 @@ func (h *AuthHandler) UpdateDevicePublicKey(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	var overlayIP sql.NullString
+	var oldPublicKey sql.NullString
+	_ = h.DB.QueryRow(
+		`SELECT overlay_ip, public_key FROM devices WHERE id = ? AND user_id = ?`,
+		req.DeviceID, session.UserID,
+	).Scan(&overlayIP, &oldPublicKey)
+
 	result, err := h.DB.Exec(
 		`UPDATE devices
 		 SET public_key = ?
@@ -62,6 +70,13 @@ func (h *AuthHandler) UpdateDevicePublicKey(w http.ResponseWriter, r *http.Reque
 	if rowsAffected == 0 {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device not found"})
 		return
+	}
+
+	if oldPublicKey.Valid && oldPublicKey.String != "" && oldPublicKey.String != req.PublicKey {
+		removeWGPeerByPublicKey(oldPublicKey.String)
+	}
+	if overlayIP.Valid && overlayIP.String != "" {
+		_ = syncWGPeer(overlayIP.String, req.PublicKey, "")
 	}
 
 	writeJSON(w, http.StatusOK, DeviceUpdateKeyResponse{

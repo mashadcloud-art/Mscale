@@ -106,10 +106,16 @@ func (h *AuthHandler) EnrollDevice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if currentOverlayIP.Valid && currentOverlayIP.String != "" {
-		b64Key, err := normalizeWGPublicKey(publicKey)
-		if err == nil {
-			exec.Command("sudo", "wg", "set", "wg0", "peer", b64Key, "allowed-ips", currentOverlayIP.String+"/32").Run()
-			exec.Command("sudo", "wg-quick", "save", "wg0").Run()
+		pruneWGZombiePeers()
+		_ = syncWGPeer(currentOverlayIP.String, publicKey, "")
+
+		var tunnelMode, exitNodeID sql.NullString
+		_ = h.DB.QueryRow(
+			`SELECT tunnel_mode, exit_node_id FROM devices WHERE id = ? AND user_id = ?`,
+			deviceID, session.UserID,
+		).Scan(&tunnelMode, &exitNodeID)
+		if tunnelMode.Valid && tunnelMode.String == "exit-via" && exitNodeID.Valid && exitNodeID.String != "" {
+			_ = h.reapplyExitRouteForDevice(deviceID, exitNodeID.String, session.UserID)
 		}
 
 		serverKey, err := getWGServerPublicKey()
@@ -124,6 +130,7 @@ func (h *AuthHandler) EnrollDevice(w http.ResponseWriter, r *http.Request) {
 			 WHERE id = ? AND user_id = ?`,
 			"online", deviceID, session.UserID,
 		)
+		NotifyDevicesChanged()
 
 		writeJSON(w, http.StatusOK, DeviceEnrollResponse{
 			DeviceID:   deviceID,
@@ -136,24 +143,20 @@ func (h *AuthHandler) EnrollDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b64Key, err := normalizeWGPublicKey(publicKey)
-	if err != nil {
+	if _, err := normalizeWGPublicKey(publicKey); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "stored public_key is invalid"})
 		return
 	}
 
 	overlayIP := nextOverlayIP()
 
-	cmd := exec.Command("sudo", "wg", "set", "wg0", "peer", b64Key, "allowed-ips", overlayIP+"/32")
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if err := syncWGPeer(overlayIP, publicKey, ""); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error":   "could not add peer to wg0",
-			"details": string(out),
+			"details": err.Error(),
 		})
 		return
 	}
-
-	_, _ = exec.Command("sudo", "wg-quick", "save", "wg0").CombinedOutput()
 
 	_, err = h.DB.Exec(
 		`UPDATE devices
@@ -165,6 +168,7 @@ func (h *AuthHandler) EnrollDevice(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update device after enrollment"})
 		return
 	}
+	NotifyDevicesChanged()
 
 	serverKey, err := getWGServerPublicKey()
 	if err != nil {

@@ -95,6 +95,12 @@ func Migrate(db *sql.DB) error {
 			expires_at DATETIME NOT NULL,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);`,
+
+		`CREATE TABLE IF NOT EXISTS auth_bridge_tokens (
+			token TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			expires_at DATETIME NOT NULL
+		);`,
 	}
 
 	for _, q := range queries {
