@@ -285,6 +285,10 @@ func serveDashboard(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "dashboard.html")
 }
 
+func serveLoginPage(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "login.html")
+}
+
 func watchDeviceHeartbeats(sqlDB *sql.DB) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -337,6 +341,8 @@ func main() {
 	go watchDeviceHeartbeats(sqlDB)
 
 	mux := http.NewServeMux()
+	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
+	mux.HandleFunc("/login.html", serveLoginPage)
 	mux.HandleFunc("/", serveDashboard)
 	mux.HandleFunc("/dashboard", serveDashboard)
 	mux.HandleFunc("/register", authMiddleware(authHandler)(registerHandler))

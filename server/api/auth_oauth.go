@@ -173,7 +173,7 @@ func (h *AuthHandler) LoginGoogleCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	http.Redirect(w, r, "/mscale/?desktop=1", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, "/mscale/", http.StatusTemporaryRedirect)
 }
 
 func (h *AuthHandler) CheckLoginStatus(w http.ResponseWriter, r *http.Request) {
