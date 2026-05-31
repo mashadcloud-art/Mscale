@@ -152,15 +152,7 @@ func (h *AuthHandler) LoginGoogleCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    sessionID,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   r.TLS != nil,
-		Expires:  expiresAt,
-	})
+	h.writeSessionCookie(w, r, sessionID, expiresAt)
 
 	if strings.HasPrefix(state, "desktop_") {
 		desktopSession := strings.TrimPrefix(state, "desktop_")

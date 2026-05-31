@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mscale — Download</title>
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --blue: #2563eb; --blue-dark: #1e3a8a; --blue-light: #dbeafe;
+    --text: #0f172a; --muted: #64748b; --border: #e2e8f0; --bg: #f8fafc;
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  nav {
+    height: 56px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; position: sticky; top: 0;
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(10px); z-index: 50;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; color: var(--text); text-decoration: none; }
+  .logo img { width: 28px; height: 28px; object-fit: contain; }
+  .nav-link { font-size: 13px; font-weight: 500; color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
+  .nav-link:hover { color: var(--text); background: #fff; }
+  .shell { max-width: 720px; margin: 0 auto; padding: 48px 20px 80px; text-align: center; }
+  .hero-logo { width: 64px; height: 64px; margin: 0 auto 20px; object-fit: contain; }
+  .hero h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.6px; margin-bottom: 10px; }
+  .hero p { font-size: 16px; color: var(--muted); line-height: 1.55; margin-bottom: 28px; }
+  .tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; }
+  .tab {
+    border: 1px solid var(--border); background: #fff; color: var(--muted);
+    font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 999px; cursor: pointer;
+  }
+  .tab.active { background: var(--blue-light); color: var(--blue-dark); border-color: #bfdbfe; }
+  .dl-card {
+    background: linear-gradient(145deg, #1e3a8a 0%, #2563eb 55%, #3b82f6 100%);
+    border-radius: 20px; padding: 36px 32px; color: #fff;
+    box-shadow: 0 12px 40px rgba(37,99,235,0.25); margin-bottom: 32px;
+  }
+  .dl-card.android { background: linear-gradient(145deg, #065f46 0%, #059669 55%, #10b981 100%); box-shadow: 0 12px 40px rgba(16,185,129,0.25); }
+  .dl-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .dl-card .sub { font-size: 14px; opacity: 0.85; margin-bottom: 20px; }
+  .dl-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #fff; color: var(--blue-dark); font-size: 16px; font-weight: 700;
+    padding: 14px 32px; border-radius: 12px; text-decoration: none;
+    transition: transform 0.15s, box-shadow 0.15s; box-shadow: 0 4px 16px rgba(0,0,0,0.15); min-width: 240px;
+  }
+  .dl-card.android .dl-btn { color: #065f46; }
+  .dl-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+  .dl-meta { margin-top: 14px; font-size: 12px; opacity: 0.75; }
+  .steps { text-align: left; background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 24px 28px; }
+  .steps h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 16px; }
+  .step { display: flex; gap: 14px; margin-bottom: 18px; align-items: flex-start; }
+  .step:last-child { margin-bottom: 0; }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--blue-light); color: var(--blue-dark);
+    font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .step-body { font-size: 14px; color: var(--muted); line-height: 1.55; padding-top: 3px; }
+  .step-body strong { color: var(--text); font-weight: 600; }
+  .note { margin-top: 20px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/mscale/" class="logo"><img src="assets/logo.png" alt=""> Mscale</a>
+  <a href="/mscale/login.html" class="nav-link">Sign in</a>
+</nav>
+
+<div class="shell">
+  <img src="assets/logo.png" alt="" class="hero-logo">
+  <div class="hero">
+    <h1>Download Mscale</h1>
+    <p>Secure mesh VPN for desktop and mobile — same account, same network.</p>
+  </div>
+
+  <div class="tabs">
+    <button type="button" class="tab active" id="tab-windows" onclick="showPlatform('windows')">🪟 Windows</button>
+    <button type="button" class="tab" id="tab-android" onclick="showPlatform('android')">🤖 Android</button>
+  </div>
+
+  <div class="dl-card" id="card-windows">
+    <h2>Mscale for Windows</h2>
+    <p class="sub">Windows 10 or later · 64-bit</p>
+    <a href="#" class="dl-btn" id="dl-windows-btn">↓ Download for Windows</a>
+    <p class="dl-meta" id="dl-windows-meta">Loading…</p>
+  </div>
+
+  <div class="dl-card android hidden" id="card-android">
+    <h2>Mscale for Android</h2>
+    <p class="sub">Android 7.0+ · Phone &amp; tablet</p>
+    <a href="#" class="dl-btn" id="dl-android-btn">↓ Download APK</a>
+    <p class="dl-meta" id="dl-android-meta">Loading…</p>
+  </div>
+
+  <div class="steps" id="steps-windows">
+    <h3>How to install on Windows</h3>
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Download</strong> the installer.</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Run</strong> it and click Yes if Windows asks.</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Sign in</strong> and tap the power button to connect.</div></div>
+  </div>
+
+  <div class="steps hidden" id="steps-android">
+    <h3>How to install on Android</h3>
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Download</strong> the APK on your phone.</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Open</strong> the file and allow install from browser if asked.</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Sign in</strong> with Google or email, then tap connect.</div></div>
+  </div>
+
+  <p class="note" id="platform-note">Windows installer includes everything — no extra setup.</p>
+</div>
+
+<script>
+let manifest = {};
+
+function showPlatform(p) {
+  const win = p === 'windows';
+  document.getElementById('card-windows').classList.toggle('hidden', !win);
+  document.getElementById('card-android').classList.toggle('hidden', win);
+  document.getElementById('steps-windows').classList.toggle('hidden', !win);
+  document.getElementById('steps-android').classList.toggle('hidden', win);
+  document.getElementById('tab-windows').classList.toggle('active', win);
+  document.getElementById('tab-android').classList.toggle('active', !win);
+  document.getElementById('platform-note').textContent = win
+    ? 'Windows installer includes everything — no extra setup.'
+    : 'Android APK — install directly. Google Play coming soon.';
+}
+
+function relUrl(full) {
+  if (!full) return '#';
+  return full.replace(/^https?:\/\/[^/]+\/mscale\//, '');
+}
+
+(async function () {
+  try {
+    const res = await fetch('/mscale/api/app/latest');
+    if (res.ok) manifest = await res.json();
+  } catch (_) {}
+
+  const winVer = manifest.version || '0.4.28';
+  const winUrl = relUrl(manifest.setup_url || manifest.download_url || 'downloads/MscaleSetup-v0.4.28.exe');
+  const apkVer = manifest.android_version || '1.0.0';
+  const apkUrl = relUrl(manifest.android_apk_url || 'downloads/mscale-android-v1.0.0.apk');
+
+  const wBtn = document.getElementById('dl-windows-btn');
+  wBtn.href = winUrl;
+  wBtn.setAttribute('download', '');
+  document.getElementById('dl-windows-meta').textContent = 'Version ' + winVer + ' · Installer';
+
+  const aBtn = document.getElementById('dl-android-btn');
+  aBtn.href = apkUrl;
+  aBtn.setAttribute('download', '');
+  document.getElementById('dl-android-meta').textContent = 'Version ' + apkVer + ' · APK';
+
+  if (/android/i.test(navigator.userAgent)) showPlatform('android');
+})();
+</script>
+</body>
+</html>

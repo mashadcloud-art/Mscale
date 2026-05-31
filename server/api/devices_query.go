@@ -6,13 +6,14 @@ import (
 	"time"
 )
 
-// ListDesktopDevicesForUser returns real desktop-app devices for one user (admin panel + WebSocket).
+// ListDesktopDevicesForUser returns enrolled app devices for one user (desktop + mobile; admin panel + WebSocket).
 func ListDesktopDevicesForUser(db *sql.DB, userID string) ([]DeviceListItem, error) {
 	rows, err := db.Query(`
 		SELECT
 			d.id, d.user_id, d.device_name, d.platform, d.device_type, d.public_key,
 			d.overlay_ip, d.app_version, d.os_version, d.current_dns, d.exit_node_id,
 			d.tunnel_mode, d.endpoint_ip, d.enrolled_at, d.last_seen_at, d.status,
+			COALESCE(d.wake_remote_enabled, 0), COALESCE(d.wake_call_numbers, ''), COALESCE(d.device_phone, ''),
 			u.email, u.display_name,
 			en.id, en.device_id, en.owner_user_id, en.label, en.country_code, en.city,
 			en.health_status, en.is_private, en.is_enabled
@@ -20,7 +21,7 @@ func ListDesktopDevicesForUser(db *sql.DB, userID string) ([]DeviceListItem, err
 		INNER JOIN users u ON u.id = d.user_id
 		LEFT JOIN exit_nodes en ON d.exit_node_id = en.id
 		WHERE d.user_id = ?
-		  AND d.device_type = 'desktop'
+		  AND d.device_type IN ('desktop', 'mobile')
 		  AND LOWER(d.device_name) NOT LIKE 'test-%'
 		ORDER BY d.device_name ASC
 	`, userID)
@@ -41,11 +42,14 @@ func ListDesktopDevicesForUser(db *sql.DB, userID string) ([]DeviceListItem, err
 		var enID, enDeviceID, enOwnerUserID, enLabel sql.NullString
 		var enCountryCode, enCity, enHealthStatus sql.NullString
 		var enIsPrivate, enIsEnabled sql.NullInt64
+		var wakeEnabled int
+		var wakeNumbers, devicePhone string
 
 		err := rows.Scan(
 			&d.ID, &d.UserID, &d.DeviceName, &d.Platform, &d.DeviceType, &d.PublicKey,
 			&overlayIP, &appVersion, &osVersion, &currentDNS, &exitNodeID,
 			&tunnelMode, &endpointIP, &enrolledAt, &lastSeenAt, &d.Status,
+			&wakeEnabled, &wakeNumbers, &devicePhone,
 			&userEmail, &userDisplayName,
 			&enID, &enDeviceID, &enOwnerUserID, &enLabel, &enCountryCode, &enCity,
 			&enHealthStatus, &enIsPrivate, &enIsEnabled,
@@ -88,6 +92,9 @@ func ListDesktopDevicesForUser(db *sql.DB, userID string) ([]DeviceListItem, err
 			d.LastSeenAt = &s
 		}
 		d.Status = DeriveDeviceStatus(d.Status, lastSeenAt)
+		d.WakeRemoteEnabled = wakeEnabled == 1
+		d.WakeCallNumbers = strings.TrimSpace(wakeNumbers)
+		d.DevicePhone = strings.TrimSpace(devicePhone)
 
 		if enID.Valid {
 			exitNode := ExitNodeSummary{

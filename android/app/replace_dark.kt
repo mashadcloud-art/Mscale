@@ -1,0 +1,381 @@
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DashboardScreen(
+    modifier: Modifier = Modifier, 
+    vpnController: mscalecore.VpnController,
+    sessionToken: String,
+    isConnected: Boolean,
+    onExitNodeSelected: (String) -> Unit,
+    shareAsExit: Boolean,
+    onShareAsExitChanged: (Boolean) -> Unit,
+    shareCountry: String,
+    onShareCountryChanged: (String) -> Unit,
+    shareExitMode: String,
+    onShareExitModeChanged: (String) -> Unit,
+    wakeRemoteEnabled: Boolean,
+    wakeOnAnyCall: Boolean,
+    wakeWifiAwake: Boolean,
+    wakePhoneInput: String,
+    onWakeRemoteChanged: (Boolean) -> Unit,
+    onWakeOnAnyCallChanged: (Boolean) -> Unit,
+    onWakeWifiAwakeChanged: (Boolean) -> Unit,
+    onWakePhoneInputChanged: (String) -> Unit,
+    deviceMyPhone: String,
+    onDeviceMyPhoneChanged: (String) -> Unit,
+    onCallToWake: (deviceId: String, phone: String) -> Unit,
+    onConnectRequest: () -> Unit, 
+    onDisconnectRequest: () -> Unit,
+    onLogoutRequest: () -> Unit
+) {
+    var showSettings by remember { mutableStateOf(false) }
+    var routingMode by remember { mutableStateOf("mesh") }
+    var selectedExitLabel by remember { mutableStateOf("") }
+    var selectedExitId by remember { mutableStateOf("") }
+    val exitOptions = remember { mutableStateListOf<ExitNodeOption>() }
+    
+    val ctx = LocalContext.current
+    val userName = remember { WakePrefs.getUserName(ctx).ifEmpty { "User" } }
+    val userInitial = userName.take(1).uppercase()
+    
+    // Theme Colors
+    val bgDark = Color(0xFF0D0F14)
+    val cardDark = Color(0xFF1A1D25)
+    val cardStroke = Color(0xFF2A2D36)
+    val textPrimary = Color(0xFFF3F4F6)
+    val textSecondary = Color(0xFF9CA3AF)
+    val gradientPrimary = androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFF8B5CF6)))
+    val gradientConnected = androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF059669), Color(0xFF10B981)))
+    
+    LaunchedEffect(sessionToken) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val jsonStr = vpnController.fetchExitNodes(sessionToken)
+                val jsonArray = org.json.JSONArray(jsonStr)
+                val nodes = mutableListOf<ExitNodeOption>()
+                var indiaId = ""
+                var indiaLabel = ""
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    val id = obj.optString("id", "")
+                    if (id.isEmpty()) continue
+                    val country = obj.optString("country_code", obj.optString("label", "Exit"))
+                    val deviceName = obj.optString("device_name", "node")
+                    val label = "$country ($deviceName)"
+                    nodes.add(ExitNodeOption(id, label, country))
+                    if (country.equals("IN", true) || country.contains("India", true)) {
+                        indiaId = id
+                        indiaLabel = label
+                    }
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    exitOptions.clear()
+                    exitOptions.addAll(nodes)
+                    if (indiaId.isNotEmpty()) {
+                        selectedExitLabel = indiaLabel
+                        selectedExitId = indiaId
+                        onExitNodeSelected(indiaId)
+                    }
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
+    Scaffold(
+        containerColor = bgDark,
+        bottomBar = {
+            // Fake Bottom Nav for aesthetics
+            Row(
+                modifier = Modifier.fillMaxWidth().background(Color(0xFF12141B)).padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = androidx.compose.material.icons.Icons.Default.Home, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(24.dp))
+                    Text("Home", color = Color(0xFF8B5CF6), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = androidx.compose.material.icons.Icons.Default.Lock, contentDescription = null, tint = Color(0xFF4B5563), modifier = Modifier.size(24.dp))
+                    Text("Servers", color = Color(0xFF4B5563), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = androidx.compose.material.icons.Icons.Default.Info, contentDescription = null, tint = Color(0xFF4B5563), modifier = Modifier.size(24.dp))
+                    Text("Stats", color = Color(0xFF4B5563), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = androidx.compose.material.icons.Icons.Default.Person, contentDescription = null, tint = Color(0xFF4B5563), modifier = Modifier.size(24.dp))
+                    Text("Profile", color = Color(0xFF4B5563), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 20.dp, vertical = 24.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier.size(40.dp).clip(CircleShape).background(gradientPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(userInitial, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(userName, color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("Premium Plan", color = Color(0xFF6B7280), fontSize = 12.sp)
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(cardDark)
+                        .clickable { showSettings = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(imageVector = androidx.compose.material.icons.Icons.Default.Settings, contentDescription = "Settings", tint = textSecondary, modifier = Modifier.size(20.dp))
+                }
+            }
+
+            // Shield Area
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier.size(160.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Sweep gradient ring
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(
+                                if (isConnected) androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color(0xFF059669), Color(0xFF10B981), Color(0xFF059669)))
+                                else androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFF1A1D25), Color(0xFF6366F1)))
+                            )
+                    )
+                    // Inner dark circle
+                    Box(
+                        modifier = Modifier
+                            .size(130.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF12141B)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = if (isConnected) androidx.compose.material.icons.Icons.Default.CheckCircle else androidx.compose.material.icons.Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = if (isConnected) Color(0xFF10B981) else Color(0xFF8B5CF6),
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                if (isConnected) "PROTECTED" else "UNPROTECTED", 
+                                color = if (isConnected) Color(0xFF10B981) else Color(0xFFA78BFA),
+                                fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(20.dp))
+                
+                Button(
+                    onClick = { if (isConnected) onDisconnectRequest() else onConnectRequest() },
+                    modifier = Modifier.height(44.dp).width(140.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(22.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(if (isConnected) gradientConnected else gradientPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(if (isConnected) "Disconnect" else "Connect", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
+            }
+
+            // Fake Stats Row
+            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                listOf(Pair("Download", "0 MB"), Pair("Upload", "0 MB"), Pair("Session", "0:00")).forEach { (label, value) ->
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(cardDark)
+                            .padding(vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(value, color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(label.uppercase(), color = Color(0xFF6B7280), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    }
+                }
+            }
+
+            // Connection Mode
+            Text("CONNECTION MODE", color = Color(0xFF6B7280), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 12.dp))
+            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (routingMode == "mesh") Color(0xFF1E1B4B) else cardDark)
+                        .clickable(enabled = !isConnected) { routingMode = "mesh" }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Mesh", color = if (routingMode == "mesh") Color(0xFFA78BFA) else textSecondary, fontWeight = if (routingMode == "mesh") FontWeight.Bold else FontWeight.Medium, fontSize = 14.sp)
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (routingMode == "exit_node") Color(0xFF1E1B4B) else cardDark)
+                        .clickable(enabled = !isConnected) { routingMode = "exit_node" }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Exit Node", color = if (routingMode == "exit_node") Color(0xFFA78BFA) else textSecondary, fontWeight = if (routingMode == "exit_node") FontWeight.Bold else FontWeight.Medium, fontSize = 14.sp)
+                }
+            }
+
+            // Server List
+            if (routingMode == "exit_node") {
+                Text("SELECT SERVER", color = Color(0xFF6B7280), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    exitOptions.forEach { node ->
+                        val isSelected = selectedExitId == node.id
+                        val flag = when(node.country.uppercase()) {
+                            "IN" -> "IN"
+                            "AE" -> "AE"
+                            "US" -> "US"
+                            "DE" -> "DE"
+                            else -> node.country.take(2).uppercase()
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (isSelected) Color(0xFF1A1B2E) else cardDark)
+                                .clickable(enabled = !isConnected) { 
+                                    selectedExitId = node.id
+                                    selectedExitLabel = node.label
+                                    onExitNodeSelected(node.id) 
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF0F172A)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(flag, fontSize = 14.sp, color = textPrimary)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(node.label, color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(node.id, color = textSecondary, fontSize = 12.sp, maxLines = 1)
+                            }
+                            if (isSelected) {
+                                Box(
+                                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF052E16)).padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Sel", color = Color(0xFF34D399), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                    if (exitOptions.isEmpty()) {
+                        Text("No exit nodes available", color = textSecondary, fontSize = 14.sp, modifier = Modifier.padding(vertical = 16.dp))
+                    }
+                }
+            }
+        }
+    }
+    
+    // Settings Dialog remains similar but themed dark
+    if (showSettings) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showSettings = false }) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = cardDark)
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text("Settings", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Text("Share as exit node", color = textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Others can use this phone's IP", fontSize = 12.sp, color = textSecondary)
+                    Switch(checked = shareAsExit, onCheckedChange = onShareAsExitChanged, enabled = !isConnected)
+                    
+                    if (shareAsExit) {
+                        Row {
+                            FilterChip(selected = shareCountry == "IN", onClick = { onShareCountryChanged("IN") }, label = { Text("IN") }, enabled = !isConnected)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            FilterChip(selected = shareCountry == "AE", onClick = { onShareCountryChanged("AE") }, label = { Text("AE") }, enabled = !isConnected)
+                        }
+                    }
+                    
+                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = cardStroke)
+                    
+                    Text("Remote Wake", color = textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Allow remote wake", fontSize = 12.sp, color = textSecondary)
+                    Switch(checked = wakeRemoteEnabled, onCheckedChange = onWakeRemoteChanged)
+                    
+                    if (wakeRemoteEnabled) {
+                        OutlinedTextField(
+                            value = deviceMyPhone,
+                            onValueChange = onDeviceMyPhoneChanged,
+                            label = { Text("This phone's number", color = textSecondary) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = textPrimary,
+                                unfocusedTextColor = textPrimary
+                            )
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    Button(
+                        onClick = { 
+                            showSettings = false
+                            onLogoutRequest() 
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                    ) {
+                        Text("Logout")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { showSettings = false }, 
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = textPrimary)
+                    ) {
+                        Text("Close")
+                    }
+                }
+            }
+        }
+    }
+}
+
+data class ExitNodeOption(val id: String, val label: String, val country: String = "")

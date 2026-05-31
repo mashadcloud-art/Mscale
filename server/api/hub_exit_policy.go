@@ -55,11 +55,11 @@ func clearClientExitPolicy(clientOverlay string) {
 }
 
 func ensureHubExitNAT() error {
-	check := exec.Command("sudo", "iptables", "-t", "nat", "-C", "POSTROUTING", "-o", "wg0", "-j", "MASQUERADE")
+	check := exec.Command("sudo", "iptables", "-t", "nat", "-C", "POSTROUTING", "-s", "100.64.0.0/10", "!", "-d", "100.64.0.0/10", "-j", "MASQUERADE")
 	if check.Run() == nil {
 		return nil
 	}
-	if _, err := runSudo("iptables", "-t", "nat", "-A", "POSTROUTING", "-o", "wg0", "-j", "MASQUERADE"); err != nil {
+	if _, err := runSudo("iptables", "-t", "nat", "-A", "POSTROUTING", "-s", "100.64.0.0/10", "!", "-d", "100.64.0.0/10", "-j", "MASQUERADE"); err != nil {
 		return err
 	}
 	return nil

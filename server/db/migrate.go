@@ -101,12 +101,50 @@ func Migrate(db *sql.DB) error {
 			session_id TEXT NOT NULL,
 			expires_at DATETIME NOT NULL
 		);`,
+
+		`CREATE TABLE IF NOT EXISTS device_commands (
+			id TEXT PRIMARY KEY,
+			device_id TEXT NOT NULL,
+			user_id TEXT NOT NULL,
+			command_type TEXT NOT NULL,
+			payload_json TEXT NOT NULL DEFAULT '{}',
+			status TEXT NOT NULL DEFAULT 'pending',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME
+		);`,
+
+		`CREATE TABLE IF NOT EXISTS acls (
+			id TEXT PRIMARY KEY,
+			source_ip TEXT NOT NULL,
+			dest_ip TEXT NOT NULL,
+			port INTEGER NOT NULL DEFAULT 0,
+			action TEXT NOT NULL DEFAULT 'DROP',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);`,
 	}
 
 	for _, q := range queries {
 		if _, err := db.Exec(q); err != nil {
 			return err
 		}
+	}
+
+	// Idempotent column adds for wake-on-call (ignore duplicate column errors).
+	for _, q := range []string{
+		`ALTER TABLE devices ADD COLUMN wake_remote_enabled INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE devices ADD COLUMN wake_call_numbers TEXT DEFAULT ''`,
+		`ALTER TABLE devices ADD COLUMN device_phone TEXT DEFAULT ''`,
+		`ALTER TABLE devices ADD COLUMN current_dns TEXT DEFAULT ''`,
+		`ALTER TABLE devices ADD COLUMN exit_node_id TEXT`,
+		`ALTER TABLE devices ADD COLUMN tunnel_mode TEXT DEFAULT 'mesh'`,
+		`ALTER TABLE devices ADD COLUMN endpoint_ip TEXT`,
+		
+		`CREATE TABLE IF NOT EXISTS settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		);`,
+	} {
+		_, _ = db.Exec(q)
 	}
 
 	return nil

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,7 +23,7 @@ func (a *App) ensureDeviceRecord(mode string, publicKey string) (string, error) 
 		Platform:   "windows",
 		DeviceType: "desktop",
 		PublicKey:  publicKey,
-		AppVersion: "0.1.0",
+		AppVersion: GetAppVersion(),
 		OSVersion:  "windows",
 		CurrentDNS: getSystemDNS(),
 		TunnelMode: mode,
@@ -166,7 +168,7 @@ func (a *App) EnableAsExitNode(countryCode, label string) string {
 	}
 
 	if a.assignedIP == "" {
-		if msg := a.ConnectTunnel("mesh", ""); strings.HasPrefix(msg, "Error") {
+		if msg := a.ConnectTunnel("mesh", "", "mscale"); strings.HasPrefix(msg, "Error") {
 			return msg
 		}
 	}
@@ -210,8 +212,18 @@ func (a *App) enableWindowsForwarding() {
 	if a.adapterName == "" {
 		return
 	}
+	
+	// 1. Enable IP forwarding on the WireGuard adapter
 	hiddenCommand("powershell", "-NoProfile", "-Command",
 		"Set-NetIPInterface -InterfaceAlias '"+a.adapterName+"' -Forwarding Enabled -ErrorAction SilentlyContinue").Run()
+	
+	// 2. Enable IP forwarding on all active physical adapters (Wi-Fi, Ethernet) so traffic can leave the machine
+	hiddenCommand("powershell", "-NoProfile", "-Command",
+		"Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.Name -ne '"+a.adapterName+"' } | ForEach-Object { Set-NetIPInterface -InterfaceAlias $_.Name -Forwarding Enabled -AddressFamily IPv4 -ErrorAction SilentlyContinue }").Run()
+	
+	// 3. Create NAT to masquerade WireGuard traffic to the physical adapter
+	hiddenCommand("powershell", "-NoProfile", "-Command",
+		"New-NetNat -Name 'MscaleExitNat' -InternalIPInterfaceAddressPrefix '100.64.0.0/10' -ErrorAction SilentlyContinue").Run()
 }
 
 func (a *App) activateExitRoute(exitNodeID string) error {
@@ -299,7 +311,7 @@ func (a *App) resolveExitNodeOverlay(exitNodeID string) (string, string, error) 
 	return "", "", fmt.Errorf("exit node not found")
 }
 
-func (a *App) ConnectTunnel(mode string, exitNodeID string) string {
+func (a *App) ConnectTunnel(mode string, exitNodeID string, dnsSetting string) string {
 	me, err := a.fetchMe()
 	if err != nil {
 		return "Error: You are not logged in — " + err.Error()
@@ -425,7 +437,7 @@ func (a *App) ConnectTunnel(mode string, exitNodeID string) string {
 	hiddenCommand("netsh", "interface", "ipv4", "set", "address",
 		"name="+adapterName, "static", enroll.OverlayIP, "255.192.0.0").Run()
 
-	applyMeshRoutes(adapterName)
+	applyWindowsTunnelRoutes(adapterName, overlayNet, dnsSetting)
 	if mode == "exit-via" {
 		applyExitTunnelRoutes(adapterName)
 		a.ensureExitRouteByKey(publicKey, enroll.OverlayIP)
@@ -449,13 +461,15 @@ func (a *App) ConnectTunnel(mode string, exitNodeID string) string {
 }
 
 func (a *App) DisconnectTunnel() string {
+	stats := a.getUsageStats()
 	a.teardownTunnel()
-	return "Disconnected — internet routes restored"
+	return "Disconnected - internet routes restored" + stats
 }
 
 func (a *App) ForceDisconnectTunnel() string {
+	stats := a.getUsageStats()
 	a.teardownTunnel()
-	return "Force disconnected — if web still fails, run: ipconfig /renew"
+	return "Force disconnected - if web still fails, run: ipconfig /renew" + stats
 }
 
 func (a *App) teardownTunnel() {
@@ -467,6 +481,10 @@ func (a *App) teardownTunnel() {
 	deviceID := a.deviceID
 
 	restoreWindowsInternetRoutes(adapter, overlay)
+
+	// Clean up NAT
+	hiddenCommand("powershell", "-NoProfile", "-Command",
+		"Remove-NetNat -Name 'MscaleExitNat' -Confirm:$false -ErrorAction SilentlyContinue").Run()
 
 	if a.wgEngine != nil {
 		a.wgEngine.Down()
@@ -522,3 +540,49 @@ func (a *App) GetStatus() string {
 	}
 	return fmt.Sprintf("Connected — IP: %s | %s", a.assignedIP, a.loggedInUser)
 }
+
+
+func (a *App) getUsageStats() string {
+	if a.wgEngine == nil {
+		return ""
+	}
+	uapi, err := a.wgEngine.IpcGet()
+	if err != nil {
+		return ""
+	}
+	
+	var rxTotal, txTotal int64
+	rxRe := regexp.MustCompile(`rx_bytes=(\d+)`)
+	txRe := regexp.MustCompile(`tx_bytes=(\d+)`)
+	
+	for _, match := range rxRe.FindAllStringSubmatch(uapi, -1) {
+		if val, err := strconv.ParseInt(match[1], 10, 64); err == nil {
+			rxTotal += val
+		}
+	}
+	for _, match := range txRe.FindAllStringSubmatch(uapi, -1) {
+		if val, err := strconv.ParseInt(match[1], 10, 64); err == nil {
+			txTotal += val
+		}
+	}
+	
+	if rxTotal == 0 && txTotal == 0 {
+		return ""
+	}
+	
+	formatBytes := func(b int64) string {
+		const unit = 1024
+		if b < unit {
+			return fmt.Sprintf("%d B", b)
+		}
+		div, exp := int64(unit), 0
+		for n := b / unit; n >= unit; n /= unit {
+			div *= unit
+			exp++
+		}
+		return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+	}
+	
+	return fmt.Sprintf(" \nSession Usage: Downloaded: %s | Uploaded: %s", formatBytes(rxTotal), formatBytes(txTotal))
+}
+

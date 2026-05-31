@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
@@ -81,19 +81,18 @@
                         </button>
 
                         <!-- Profile Dropdown -->
-                        <div class="relative">
-                            <button onclick="toggleProfileDropdown()" class="relative rounded-full focus:outline-none flex items-center" aria-label="User menu" id="profileButton">
+                        <div class="relative" onclick="event.stopPropagation()">
+                            <button onclick="toggleProfileDropdown(event)" class="relative rounded-full focus:outline-none flex items-center" aria-label="User menu" id="profileButton">
                                 <div class="relative shrink-0 rounded-full overflow-hidden w-8 h-8 bg-blue-100 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 flex items-center justify-center">
-                                    <span class="text-xs font-bold text-blue-700 dark:text-blue-300">MH</span>
+                                    <span class="text-xs font-bold text-blue-700 dark:text-blue-300" id="profile-initials">MH</span>
                                 </div>
                             </button>
-                            <!-- Dropdown Card -->
                             <div id="profileDropdown" class="hidden absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-2 z-50">
                                 <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
                                     <p class="text-xs text-gray-500 dark:text-gray-400">Signed in as</p>
-                                    <p class="text-sm font-semibold truncate text-gray-800 dark:text-gray-100">mashadandhaz@gmail.com</p>
+                                    <p class="text-sm font-semibold truncate text-gray-800 dark:text-gray-100" id="profile-email-dd">—</p>
                                 </div>
-                                <div class="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-sm text-red-600 dark:text-red-400" onclick="logoutUser()">Log Out</div>
+                                <button type="button" onclick="logoutUser(event)" class="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm text-red-600 dark:text-red-400">Log Out</button>
                             </div>
                         </div>
                     </nav>
@@ -179,38 +178,27 @@
                     </div>
                 </header>
 
-                <!-- "Add First Device" Interactive Hero / Banner -->
-                <div id="first-device-banner" class="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50 rounded-xl relative overflow-hidden transition-all duration-300">
-                    <!-- Dismiss Button -->
-                    <button onclick="minimizeBanner()" class="absolute right-3 top-3 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition" aria-label="Minimize block">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" x2="19" y1="12" y2="12"></line></svg>
+                <!-- Quick Start banner -->
+                <div id="first-device-banner" class="relative rounded-xl overflow-hidden border border-[#D5DAE8] dark:border-gray-700 bg-[#E7EAF2] dark:bg-gray-900 transition-all duration-300 min-h-[200px]">
+                    <img id="banner-bg" src="assets/cheetahbanner.png" alt="" class="absolute inset-0 w-full h-full object-cover object-center md:object-right pointer-events-none select-none" aria-hidden="true">
+                    <div class="absolute inset-0 bg-gradient-to-r from-[#E7EAF2]/95 via-[#E7EAF2]/75 to-transparent dark:from-gray-900/95 dark:via-gray-900/70 dark:to-transparent pointer-events-none"></div>
+                    <button onclick="minimizeBanner()" class="absolute right-3 top-3 z-20 text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white p-1.5 rounded-lg hover:bg-white/60 dark:hover:bg-black/30 transition" aria-label="Minimize block">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" x2="19" y1="12" y2="12"/></svg>
                     </button>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 items-center">
-                        <div class="p-6 md:p-8 space-y-4">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300">Quick Start</span>
-                            <h4 class="font-semibold text-lg md:text-xl text-gray-900 dark:text-white">Connect your ecosystem devices</h4>
-                            <p class="text-gray-600 dark:text-gray-400 text-sm max-w-md leading-relaxed">
-                                Experience a zero-config wireguard mesh. Add servers, development laptops, or cloud containers to test the interface dynamically.
-                            </p>
-                            <div class="pt-2 flex flex-wrap gap-2">
-                                <button onclick="openAddDeviceModal()" class="bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 text-white font-medium text-xs px-3.5 py-2 rounded shadow-sm flex items-center gap-1.5 transition">
-                                    Add device
-                                </button>
-                                <button type="button" class="hidden border border-blue-200 text-blue-600 text-xs px-3.5 py-2 rounded" aria-hidden="true">
-                                    Demo (disabled)
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Vector Graphics Container -->
-                        <div class="hidden md:flex justify-end items-center bg-gradient-to-br from-gray-900 to-black h-full p-6 select-none">
-                            <img src="assets/logo.png" alt="" class="max-h-36 w-auto object-contain opacity-95 drop-shadow-2xl">
+                    <div class="relative z-10 p-6 md:p-8 max-w-xl space-y-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300">Quick Start</span>
+                        <h4 class="font-semibold text-lg md:text-xl text-gray-900 dark:text-white">Connect your ecosystem devices</h4>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm max-w-md leading-relaxed">
+                            Add desktop, mobile, or cloud nodes to your Mscale mesh. Use <strong>Wake / manage</strong> on any device to open the app remotely.
+                        </p>
+                        <div class="pt-1 flex flex-wrap gap-2">
+                            <button onclick="openAddDeviceModal()" class="bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white font-medium text-xs px-3.5 py-2 rounded shadow-sm transition">Add device</button>
+                            <a href="download.html" class="border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs px-3.5 py-2 rounded hover:bg-white/50 dark:hover:bg-gray-800 transition">Download apps</a>
                         </div>
                     </div>
                 </div>
 
-                <!-- Restore Banner Button (shown when minimized) -->
+                <!-- Restore Banner Button                <!-- Restore Banner Button (shown when minimized) -->
                 <div id="restore-banner-wrapper" class="hidden flex justify-end">
                     <button onclick="restoreBanner()" class="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg>
@@ -262,6 +250,7 @@
                                     <th scope="col" class="px-6 py-4">Owner</th>
                                     <th scope="col" class="px-6 py-4">Status</th>
                                     <th scope="col" class="px-6 py-4">App</th>
+                                    <th scope="col" class="px-6 py-4 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-800 text-sm" id="machines-table-body">
@@ -548,12 +537,48 @@
         </div>
     </div>
 
+
+    <!-- Wake / Manage Device Modal -->
+    <div id="modal-device-actions" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
+        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl max-w-md w-full overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
+                <h3 class="font-semibold text-lg text-gray-900 dark:text-white" id="device-actions-title">Wake / manage</h3>
+                <button onclick="closeDeviceActionsModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">✕</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="action-device-id">
+                <p class="text-xs text-gray-500" id="action-device-status">—</p>
+                <div class="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/20 p-4 space-y-3">
+                    <p class="text-xs font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">Call to open app (when closed)</p>
+                    <div class="flex gap-2">
+                        <input type="tel" id="action-device-phone" placeholder="+91 98765 43210" class="flex-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-xs font-mono">
+                        <button type="button" onclick="saveDevicePhone()" class="shrink-0 bg-gray-800 text-white text-xs px-3 py-2 rounded-lg">Save</button>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="queueWakeOnly()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg">Queue wake only</button>
+                        <button type="button" onclick="callAndWake()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg">Call &amp; wake</button>
+                        <button type="button" onclick="wakeAndConnect()" class="border border-emerald-300 text-emerald-800 text-xs px-3 py-2 rounded-lg">Wake &amp; connect</button>
+                    </div>
+                </div>
+                <div class="rounded-xl border border-gray-200 dark:border-gray-800 p-4 space-y-3">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Exit routing (hub)</p>
+                    <select id="action-exit-node" class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-xs"><option value="">— Select exit node —</option></select>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="adminRouteDevice('exit-via')" class="bg-indigo-600 text-white text-xs px-3 py-2 rounded-lg">Route via exit</button>
+                        <button type="button" onclick="adminRouteDevice('enable_exit')" class="border border-indigo-300 text-indigo-700 text-xs px-3 py-2 rounded-lg">Share as exit</button>
+                        <button type="button" onclick="adminRouteDevice('mesh')" class="border border-gray-300 text-gray-600 text-xs px-3 py-2 rounded-lg">Mesh only</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- FOOTER STATUS STRIP -->
     <footer class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-3 text-center text-xs text-gray-400 dark:text-gray-500 transition-colors">
         <div class="container mx-auto max-w-7xl px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
-            <div>â”¬âŒ 2026 Admin Tailnet Simulation Console</div>
+            <div>â”¬âŒ 2026 Mscale — Secure Mesh Networking</div>
             <div class="flex gap-4">
-                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Tailscale Mesh Status: Connected</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Mscale Mesh: Live</span>
             </div>
         </div>
     </footer>
@@ -564,47 +589,64 @@
         let machines = [];
         let currentUser = null;
 
+        function isEmbeddedAdmin() { return new URLSearchParams(window.location.search).get('embedded') === '1'; }
+        function getDesktopApp() { try { return window.go?.main?.App || window.parent?.go?.main?.App; } catch (_) { return null; } }
+        function isDesktopApp() { return window.location.hostname === 'wails.localhost' || isEmbeddedAdmin() || !!getDesktopApp(); }
+        function apiPathPrefix() { return window.location.pathname.startsWith('/mscale') ? '/mscale' : ''; }
+        function assetPath(name) { if (isDesktopApp() || isEmbeddedAdmin()) return name; const p = apiPathPrefix(); return p ? p + '/assets/' + name : 'assets/' + name; }
+        function applyAssetPaths() { const b = assetPath('cheetahbanner.png'); document.getElementById('banner-bg')?.setAttribute('src', b); }
+        async function apiFetch(path, options = {}) {
+            const method = options.method || 'GET'; const body = options.body || '';
+            if (isDesktopApp() && getDesktopApp()?.AdminAPIJSON) {
+                const out = JSON.parse(await getDesktopApp().AdminAPIJSON(path, method, body) || '{}');
+                return { ok: out.status >= 200 && out.status < 300, status: out.status, json: async () => out.body };
+            }
+            return fetch(apiPathPrefix() + path, { credentials: 'include', method, body, headers: body ? {'Content-Type':'application/json'} : {} });
+        }
+        async function postAPI(path, payload) { const res = await apiFetch(path, { method: 'POST', body: JSON.stringify(payload) }); const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Request failed'); return data; }
+        let actionDevice = null; let exitNodesCache = [];
+
+
         async function fetchUserProfile() {
             try {
-                const res = await fetch('/mscale/api/me');
-                if (res.ok) {
-                    currentUser = await res.json();
-                    document.getElementById('user-email-header').textContent = currentUser.email;
-                    
-                    const profileEmails = document.querySelectorAll('#profileDropdown p.text-sm.font-semibold.truncate');
-                    if (profileEmails.length > 0) profileEmails[0].textContent = currentUser.email;
-                    
-                    const profileIconText = document.querySelector('#profileButton span.text-xs.font-bold');
-                    if (profileIconText && currentUser.display_name) profileIconText.textContent = currentUser.display_name.substring(0, 2).toUpperCase();
-                } else if (res.status === 401) {
-                    window.location.href = '/mscale/login.html';
-                }
-            } catch (e) {
-                console.error("Failed to fetch user profile", e);
-            }
-        }
-
-        async function logoutUser() {
-            try {
-                const res = await fetch('/mscale/api/auth/logout', { method: 'POST' });
-                if (res.ok) {
-                    if (sessionStorage.getItem('mscale_desktop') === '1') {
-                        window.location.href = 'http://wails.localhost/index.html?logout=1';
-                        return;
-                    }
-                    window.location.href = '/mscale/login.html';
+                if (isDesktopApp() && getDesktopApp()?.GetSessionUserJSON) {
+                    const json = await getDesktopApp().GetSessionUserJSON();
+                    if (!json) { window.location.replace(apiPathPrefix() + '/login.html?logout=1'); return; }
+                    currentUser = JSON.parse(json);
                 } else {
-                    alertNotification("Logout failed. Please try again.");
+                    const res = await apiFetch('/api/me');
+                    if (res.status === 401) { window.location.replace(apiPathPrefix() + '/login.html?logout=1'); return; }
+                    if (!res.ok) return;
+                    currentUser = await res.json();
                 }
+                document.getElementById('user-email-header').textContent = currentUser.email;
+                const pe = document.getElementById('profile-email-dd'); if (pe) pe.textContent = currentUser.email;
+                const pi = document.getElementById('profile-initials');
+                if (pi) pi.textContent = (currentUser.display_name || currentUser.email || 'MA').substring(0, 2).toUpperCase();
             } catch (e) {
-                console.error("Logout error", e);
+                console.error('Failed to fetch user profile', e);
             }
         }
 
-        function isRealDesktopDevice(d) {
+        async function logoutUser(e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            document.getElementById('profileDropdown')?.classList.add('hidden');
+            currentUser = null;
+            try {
+                if (isDesktopApp() && getDesktopApp()?.AdminLogout) await getDesktopApp().AdminLogout();
+                else await apiFetch('/api/auth/logout', { method: 'POST' });
+            } catch (_) {}
+            if (isDesktopApp() || sessionStorage.getItem('mscale_desktop') === '1') {
+                window.location.replace('index.html?logout=1');
+            } else {
+                window.location.replace(apiPathPrefix() + '/login.html?logout=1');
+            }
+        }
+
+        function isManagedDevice(d) {
             if (!d || !d.device_name) return false;
             const t = (d.device_type || 'desktop').toLowerCase();
-            if (t !== 'desktop' && t !== 'server') return false;
+            if (t !== 'desktop' && t !== 'server' && t !== 'mobile') return false;
             if (d.name && !d.device_name) return false;
             const n = d.device_name.toLowerCase();
             if (n.startsWith('test-') || n.includes('demo') || n.includes('mock')) return false;
@@ -613,7 +655,7 @@
 
         function dedupeDevices(list) {
             const byName = new Map();
-            for (const d of list.filter(isRealDesktopDevice)) {
+            for (const d of list.filter(isManagedDevice)) {
                 const key = (d.device_name || d.id || '').toLowerCase();
                 const prev = byName.get(key);
                 if (!prev) {
@@ -682,7 +724,7 @@
         async function fetchDevices() {
             try {
                 const pathPrefix = window.location.pathname.startsWith('/mscale') ? '/mscale' : '';
-                const res = await fetch(`${pathPrefix}/api/devices`, { cache: 'no-store' });
+                const res = await fetch(`${pathPrefix}/api/devices`, { cache: 'no-store', credentials: 'include' });
                 if (res.ok) {
                     applyDevices(await res.json());
                 }
@@ -786,7 +828,10 @@
                 const matchesSearch = name.toLowerCase().includes(searchTerm) || 
                                       ip.includes(searchTerm) || 
                                       os.toLowerCase().includes(searchTerm);
-                const matchesOS = filterOS === 'all' || os.toLowerCase() === filterOS;
+                const osNorm = (os || '').toLowerCase();
+                let matchesOS = filterOS === 'all';
+                if (!matchesOS && filterOS === 'ios') matchesOS = osNorm === 'ios' || osNorm === 'android';
+                else if (!matchesOS) matchesOS = osNorm === filterOS || osNorm.includes(filterOS);
                 return matchesSearch && matchesOS;
             });
 
@@ -800,7 +845,7 @@
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors";
 
-                const isOnline = m.status === 'Online';
+                const isOnline = ['online','connected'].includes((m.status || '').toLowerCase());
                 const statusColor = isOnline ? 'bg-green-500' : 'bg-gray-400';
                 const statusTextClass = isOnline ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400';
                 const pulseClass = isOnline ? 'animate-pulse' : '';
@@ -836,6 +881,9 @@
                         <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">${lastSeenLine}</div>
                     </td>
                     <td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400">${displayVersion}</td>
+                    <td class="px-6 py-4 text-right">
+                        <button onclick="openDeviceActionsModal('${m.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2.5 py-1 rounded">Wake / manage</button>
+                    </td>
                 `;
                 tableBody.appendChild(tr);
             });
@@ -887,12 +935,6 @@
         function restoreBanner() {
             document.getElementById('first-device-banner').classList.remove('hidden');
             document.getElementById('restore-banner-wrapper').classList.add('hidden');
-        }
-
-        // Profile Menu Handlers
-        function toggleProfileDropdown() {
-            const menu = document.getElementById('profileDropdown');
-            menu.classList.toggle('hidden');
         }
 
         // Modal Views
@@ -984,6 +1026,51 @@
             if (sessionStorage.getItem('mscale_desktop') === '1') {
                 document.getElementById('back-to-desktop-btn')?.classList.remove('hidden');
             }
+        }
+
+
+        function toggleProfileDropdown(e) { if (e) e.stopPropagation(); document.getElementById('profileDropdown').classList.toggle('hidden'); }
+        document.addEventListener('click', function(e) { if (!e.target.closest('#profileDropdown, #profileButton')) document.getElementById('profileDropdown')?.classList.add('hidden'); });
+
+        async function loadExitNodesForActions() {
+            try { const res = await apiFetch('/api/exit-nodes'); if (res.ok) exitNodesCache = await res.json(); } catch (_) { exitNodesCache = []; }
+            const sel = document.getElementById('action-exit-node'); if (!sel) return;
+            sel.innerHTML = '<option value="">— Select exit node —</option>' + exitNodesCache.filter(n => n.is_enabled).map(n => '<option value="' + n.id + '">' + (n.label || n.device_name || n.id) + '</option>').join('');
+        }
+        async function openDeviceActionsModal(deviceId) {
+            actionDevice = machines.find(x => x.id === deviceId); if (!actionDevice) return;
+            document.getElementById('action-device-id').value = deviceId;
+            document.getElementById('device-actions-title').textContent = actionDevice.device_name || 'Wake / manage';
+            document.getElementById('action-device-status').textContent = (actionDevice.status || 'offline') + ' • ' + (actionDevice.platform || '');
+            document.getElementById('action-device-phone').value = actionDevice.device_phone || '';
+            await loadExitNodesForActions();
+            document.getElementById('modal-device-actions').classList.remove('hidden');
+        }
+        function closeDeviceActionsModal() { document.getElementById('modal-device-actions')?.classList.add('hidden'); actionDevice = null; }
+        async function saveDevicePhone() {
+            const id = document.getElementById('action-device-id').value;
+            await postAPI('/api/devices/device-phone', { device_id: id, device_phone: document.getElementById('action-device-phone').value.trim() });
+            alertNotification('Phone saved.');
+        }
+        async function queueWakeOnly() {
+            const id = document.getElementById('action-device-id').value;
+            const data = await postAPI('/api/devices/wake', { target_device_id: id, action: 'connect' });
+            alertNotification(data.message || 'Wake queued.');
+        }
+        async function wakeAndConnect() { await queueWakeOnly(); }
+        async function callAndWake() {
+            const id = document.getElementById('action-device-id').value;
+            const phone = document.getElementById('action-device-phone').value.trim() || actionDevice?.device_phone || '';
+            await postAPI('/api/devices/wake', { target_device_id: id, action: 'connect' });
+            if (phone) window.location.href = 'tel:' + phone.replace(/\s/g, '');
+            alertNotification('Wake queued.');
+        }
+        async function adminRouteDevice(mode) {
+            const id = document.getElementById('action-device-id').value;
+            const payload = { device_id: id, mode };
+            if (mode === 'exit-via') { payload.exit_node_id = document.getElementById('action-exit-node').value; if (!payload.exit_node_id) { alertNotification('Select exit node'); return; } }
+            const data = await postAPI('/api/admin/route-device', payload);
+            alertNotification(data.message || 'Updated'); await fetchDevices();
         }
 
         // Initialize: REST poll + WebSocket for instant connect/disconnect

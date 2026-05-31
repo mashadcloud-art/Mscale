@@ -27,8 +27,6 @@ func applyExitTunnelRoutes(adapterName string) {
 		hiddenCommand("netsh", "interface", "ipv4", "add", "route",
 			"prefix="+prefix, "interface="+adapterName, "metric=1", "store=active").Run()
 	}
-	hiddenCommand("netsh", "interface", "ipv4", "set", "dns",
-		"name="+adapterName, "static", "8.8.8.8", "8.8.4.4").Run()
 	hiddenCommand("powershell", "-NoProfile", "-Command",
 		"$vpn='"+adapterName+"'; "+
 			"Set-NetIPInterface -InterfaceAlias $vpn -InterfaceMetric 1 -ErrorAction SilentlyContinue; "+
@@ -37,11 +35,36 @@ func applyExitTunnelRoutes(adapterName string) {
 }
 
 // applyWindowsTunnelRoutes adds VPN routes. Does NOT delete Wi-Fi/Ethernet defaults (avoids total blackout).
-func applyWindowsTunnelRoutes(adapterName, overlayNet string) {
+func applyWindowsTunnelRoutes(adapterName, overlayNet string, dnsSetting string) {
 	applyMeshRoutes(adapterName)
 	if overlayNet == "0.0.0.0/0" {
 		applyExitTunnelRoutes(adapterName)
 	}
+	
+	if dnsSetting == "mscale" {
+		// Set Mscale DNS (100.64.0.1) as primary, fallback to Google DNS
+		hiddenCommand("netsh", "interface", "ipv4", "set", "dns",
+			"name="+adapterName, "static", "100.64.0.1", "primary").Run()
+		hiddenCommand("netsh", "interface", "ipv4", "add", "dns",
+			"name="+adapterName, "8.8.8.8", "index=2").Run()
+	} else if dnsSetting == "google" {
+		// User chose not to use MagicDNS, fallback to pure Google DNS
+		hiddenCommand("netsh", "interface", "ipv4", "set", "dns",
+			"name="+adapterName, "static", "8.8.8.8", "primary").Run()
+		hiddenCommand("netsh", "interface", "ipv4", "add", "dns",
+			"name="+adapterName, "8.8.4.4", "index=2").Run()
+	} else if dnsSetting == "off" {
+		// User chose to disable DNS routing entirely
+		// Do nothing.
+	} else if dnsSetting != "" {
+		// Custom DNS IP provided by the UI
+		hiddenCommand("netsh", "interface", "ipv4", "set", "dns",
+			"name="+adapterName, "static", dnsSetting, "primary").Run()
+	}
+
+	// Blackhole all IPv6 traffic to prevent leaks (since we only route IPv4)
+	hiddenCommand("netsh", "interface", "ipv6", "add", "route",
+		"::/0", "interface="+adapterName, "metric=1", "store=active").Run()
 }
 
 func removeWindowsTunnelRoutes(adapterName, overlayNet string) {
@@ -60,6 +83,10 @@ func removeWindowsTunnelRoutes(adapterName, overlayNet string) {
 		hiddenCommand("netsh", "interface", "ipv4", "delete", "route",
 			overlayNet, "name="+adapterName, "store=active").Run()
 	}
+
+	// Clean up IPv6 blackhole route
+	hiddenCommand("netsh", "interface", "ipv6", "delete", "route",
+		"::/0", "interface="+adapterName, "store=active").Run()
 }
 
 // restoreWindowsInternetRoutes removes VPN routes and resets DNS/metrics on physical adapters.

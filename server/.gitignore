@@ -18,6 +18,7 @@ mscale.db
 server-privatekey
 hex-publickey
 wg-client-*.key
+google_oauth.env
 
 # Logs and Temp Files
 *.log

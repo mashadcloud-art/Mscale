@@ -133,7 +133,7 @@ func (a *App) RegisterAdminDevice(deviceName, platform string) string {
 		Platform:   platform,
 		DeviceType: deviceType,
 		PublicKey:  priv.PublicKey().String(),
-		AppVersion: "0.4.9",
+		AppVersion: GetAppVersion(),
 		OSVersion:  platform,
 		TunnelMode: "mesh",
 		EndpointIP: serverIP,
@@ -156,6 +156,47 @@ func (a *App) RegisterAdminDevice(deviceName, platform string) string {
 		return "Error: " + parseAPIError(resp)
 	}
 	return "Success: Device registered"
+}
+
+// AdminAPIJSON proxies an authenticated API call for the embedded admin console.
+func (a *App) AdminAPIJSON(path, method, body string) string {
+	path = strings.TrimSpace(path)
+	method = strings.ToUpper(strings.TrimSpace(method))
+	if method == "" {
+		method = "GET"
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	var bodyReader io.Reader
+	if strings.TrimSpace(body) != "" {
+		bodyReader = bytes.NewBufferString(body)
+	}
+	req, err := http.NewRequest(method, apiURL(path), bodyReader)
+	if err != nil {
+		out, _ := json.Marshal(map[string]interface{}{"status": 500, "body": map[string]string{"error": err.Error()}})
+		return string(out)
+	}
+	if bodyReader != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		out, _ := json.Marshal(map[string]interface{}{"status": 503, "body": map[string]string{"error": err.Error()}})
+		return string(out)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	var parsed interface{}
+	if len(respBody) > 0 {
+		if err := json.Unmarshal(respBody, &parsed); err != nil {
+			parsed = map[string]string{"raw": string(respBody)}
+		}
+	} else {
+		parsed = map[string]string{}
+	}
+	out, _ := json.Marshal(map[string]interface{}{"status": resp.StatusCode, "body": parsed})
+	return string(out)
 }
 
 // AdminLogout clears the server session from the desktop app.

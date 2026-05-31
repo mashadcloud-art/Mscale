@@ -6,8 +6,16 @@ export function AdminLogout() {
   return window['go']['main']['App']['AdminLogout']();
 }
 
-export function ConnectTunnel(arg1, arg2) {
-  return window['go']['main']['App']['ConnectTunnel'](arg1, arg2);
+export function AdminAPIJSON(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AdminAPIJSON'](arg1, arg2, arg3);
+}
+
+export function CheckForUpdateJSON() {
+  return window['go']['main']['App']['CheckForUpdateJSON']();
+}
+
+export function ConnectTunnel(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ConnectTunnel'](arg1, arg2, arg3);
 }
 
 export function DisconnectTunnel() {
@@ -24,6 +32,10 @@ export function ForceDisconnectTunnel() {
 
 export function GetAdminConsoleURL() {
   return window['go']['main']['App']['GetAdminConsoleURL']();
+}
+
+export function GetAppVersionJSON() {
+  return window['go']['main']['App']['GetAppVersionJSON']();
 }
 
 export function GetLoggedInUser() {

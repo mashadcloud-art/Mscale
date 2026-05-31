@@ -1,4 +1,6 @@
-﻿import { WindowMinimise, Quit } from '../wailsjs/runtime/runtime.js';
+import { WindowMinimise, Quit, BrowserOpenURL } from '../wailsjs/runtime/runtime.js';
+
+const ADMIN_WEB_URL = 'https://mashad.shop/mscale/';
 
 let isConnected = false;
 let actionBusy = false;
@@ -434,7 +436,18 @@ window.toggleConnection = function () {
         connectBtn?.classList.add('action-busy');
         if (statusText) statusText.innerText = 'Connecting...';
 
-        window.go.main.App.ConnectTunnel(currentMode, currentExitNodeID).then(result => {
+        let dnsSetting = 'off';
+        const overrideDns = document.getElementById('setting-dns-toggle')?.checked;
+        
+        if (overrideDns !== false) { // defaults to true if not found
+            dnsSetting = document.getElementById('setting-dns-mode')?.value || 'mscale';
+            if (dnsSetting === 'custom') {
+                const customIp = document.getElementById('setting-custom-dns-ip')?.value?.trim();
+                if (customIp) dnsSetting = customIp;
+                else dnsSetting = 'google'; // fallback if they selected custom but left it blank
+            }
+        }
+        window.go.main.App.ConnectTunnel(currentMode, currentExitNodeID, dnsSetting).then(result => {
             if (result.startsWith('Error')) {
                 alert(result);
                 if (statusText) statusText.innerText = 'Disconnected';
@@ -573,6 +586,66 @@ window.selectExitNode = function (id, label) {
     window.closeModal('location-modal');
 };
 
+window.selectDnsOption = function (val, text) {
+    const hiddenInput = document.getElementById('setting-dns-mode');
+    const selectedText = document.getElementById('setting-dns-selected-text');
+    const optionsMenu = document.getElementById('setting-dns-options-menu');
+    
+    if (hiddenInput && selectedText) {
+        hiddenInput.value = val;
+        selectedText.innerText = text;
+        localStorage.setItem('mscale_dns_mode', val);
+        
+        // Trigger manual update
+        const customDnsContainer = document.getElementById('setting-custom-dns-container');
+        if (customDnsContainer) {
+            if (val === 'custom') {
+                customDnsContainer.classList.remove('hidden');
+            } else {
+                customDnsContainer.classList.add('hidden');
+            }
+        }
+    }
+    
+    // Close menu
+    if (optionsMenu) {
+        optionsMenu.classList.add('opacity-0', 'invisible', 'scale-95');
+        optionsMenu.classList.remove('opacity-100', 'visible', 'scale-100');
+    }
+};
+
+window.copyAdminWebLink = async function () {
+    try {
+        await navigator.clipboard.writeText(ADMIN_WEB_URL);
+    } catch (_) {
+        const el = document.createElement('textarea');
+        el.value = ADMIN_WEB_URL;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+    }
+    const hint = document.getElementById('admin-link-hint');
+    if (hint) {
+        const prev = hint.textContent;
+        hint.textContent = 'Link copied!';
+        setTimeout(() => { hint.textContent = prev; }, 1800);
+    }
+};
+
+window.openAdminInBrowser = async function () {
+    if (!window.go?.main?.App?.GetAdminConsoleURL) {
+        BrowserOpenURL(ADMIN_WEB_URL);
+        return;
+    }
+    try {
+        const url = await window.go.main.App.GetAdminConsoleURL();
+        BrowserOpenURL(url || ADMIN_WEB_URL);
+    } catch (_) {
+        BrowserOpenURL(ADMIN_WEB_URL);
+    }
+};
+
 window.openAdminConsole = async function () {
     const overlay = document.getElementById('admin-overlay');
     const frame = document.getElementById('admin-frame');
@@ -662,12 +735,118 @@ function initAdminRpcBridge() {
     });
 }
 
+let pendingUpdateUrl = '';
+
+async function checkForUpdates() {
+    if (!window.go?.main?.App?.CheckForUpdateJSON) return;
+    try {
+        const raw = await window.go.main.App.CheckForUpdateJSON();
+        const info = JSON.parse(raw || '{}');
+        if (!info.update_available) return;
+        pendingUpdateUrl = info.setup_url || info.download_url || 'https://mashad.shop/mscale/download.html';
+        const banner = document.getElementById('update-banner');
+        const text = document.getElementById('update-banner-text');
+        if (text) {
+            const notes = info.notes ? ` — ${info.notes}` : '';
+            text.textContent = `Update available: v${info.latest_version} (you have v${info.current_version})${notes}`;
+        }
+        banner?.classList.remove('hidden');
+    } catch (_) {}
+}
+
+window.openUpdateDownload = function () {
+    const url = pendingUpdateUrl || 'https://mashad.shop/mscale/download.html';
+    BrowserOpenURL(url);
+};
+
+window.dismissUpdateBanner = function () {
+    document.getElementById('update-banner')?.classList.add('hidden');
+    try { localStorage.setItem('mscale_update_dismissed', pendingUpdateUrl); } catch (_) {}
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initAdminRpcBridge();
     restoreRememberEmail();
     loadSavedAccounts();
     initLoginScrollFade();
+
+    const dnsToggle = document.getElementById('setting-dns-toggle');
+    const dnsDropdownContainer = document.getElementById('setting-dns-dropdown-container');
+    const dnsModeSelect = document.getElementById('setting-dns-mode');
+    const customDnsContainer = document.getElementById('setting-custom-dns-container');
+    const customDnsIp = document.getElementById('setting-custom-dns-ip');
+
+    if (dnsModeSelect && customDnsContainer && customDnsIp) {
+        if (dnsToggle) {
+            const savedToggle = localStorage.getItem('mscale_dns_override') || 'true';
+            dnsToggle.checked = (savedToggle === 'true');
+        }
+
+        const savedDnsMode = localStorage.getItem('mscale_dns_mode') || 'mscale';
+        dnsModeSelect.value = savedDnsMode;
+        
+        const savedCustomIp = localStorage.getItem('mscale_custom_dns_ip') || '';
+        customDnsIp.value = savedCustomIp;
+
+        const updateCustomDnsVisibility = () => {
+            if (dnsToggle && !dnsToggle.checked) {
+                dnsDropdownContainer?.classList.add('hidden');
+                customDnsContainer.classList.add('hidden');
+                return;
+            }
+            dnsDropdownContainer?.classList.remove('hidden');
+            if (dnsModeSelect.value === 'custom') {
+                customDnsContainer.classList.remove('hidden');
+            } else {
+                customDnsContainer.classList.add('hidden');
+            }
+        };
+        updateCustomDnsVisibility();
+
+        dnsToggle?.addEventListener('change', (e) => {
+            localStorage.setItem('mscale_dns_override', e.target.checked);
+            updateCustomDnsVisibility();
+        });
+
+        // Initialize custom dropdown text
+        const dnsSelectedText = document.getElementById('setting-dns-selected-text');
+        if (dnsSelectedText) {
+            if (savedDnsMode === 'google') dnsSelectedText.innerText = 'Google Public DNS';
+            else if (savedDnsMode === 'custom') dnsSelectedText.innerText = 'Custom DNS...';
+            else dnsSelectedText.innerText = 'Mscale MagicDNS';
+        }
+
+        // Custom dropdown toggle logic
+        const dnsDropdownBtn = document.getElementById('setting-dns-dropdown-btn');
+        const dnsOptionsMenu = document.getElementById('setting-dns-options-menu');
+        
+        if (dnsDropdownBtn && dnsOptionsMenu) {
+            dnsDropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isClosed = dnsOptionsMenu.classList.contains('opacity-0');
+                if (isClosed) {
+                    dnsOptionsMenu.classList.remove('opacity-0', 'invisible', 'scale-95');
+                    dnsOptionsMenu.classList.add('opacity-100', 'visible', 'scale-100');
+                } else {
+                    dnsOptionsMenu.classList.add('opacity-0', 'invisible', 'scale-95');
+                    dnsOptionsMenu.classList.remove('opacity-100', 'visible', 'scale-100');
+                }
+            });
+
+            // Close when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!dnsDropdownBtn.contains(e.target) && !dnsOptionsMenu.contains(e.target)) {
+                    dnsOptionsMenu.classList.add('opacity-0', 'invisible', 'scale-95');
+                    dnsOptionsMenu.classList.remove('opacity-100', 'visible', 'scale-100');
+                }
+            });
+        }
+
+        customDnsIp.addEventListener('input', (e) => {
+            localStorage.setItem('mscale_custom_dns_ip', e.target.value.trim());
+        });
+    }
 
     document.getElementById('btn-minimize')?.addEventListener('click', () => {
         WindowMinimise();
@@ -691,4 +870,5 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.go?.main?.App?.GetStatus) {
         scheduleRestoreVpnState();
     }
+    checkForUpdates();
 });

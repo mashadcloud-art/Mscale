@@ -169,7 +169,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.CreateSession(w, userID); err != nil {
+	if err := h.CreateSession(w, r, userID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create session"})
 		return
 	}

@@ -80,10 +80,7 @@ func (h *AuthHandler) EnableExitNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isPrivate := 0 // default public in tailnet so others can pick this exit node
-	if req.IsPrivate != nil && *req.IsPrivate {
-		isPrivate = 1
-	}
+	isPrivate := 1 // STRICT ISOLATION: always private
 
 	var exitNodeID string
 	err = h.DB.QueryRow(`SELECT id FROM exit_nodes WHERE device_id = ?`, req.DeviceID).Scan(&exitNodeID)
@@ -178,19 +175,10 @@ func (h *AuthHandler) ListExitNodes(w http.ResponseWriter, r *http.Request) {
 		INNER JOIN devices d ON d.id = en.device_id
 		INNER JOIN users u ON u.id = en.owner_user_id
 		WHERE en.is_enabled = 1
-		  AND d.device_type IN ('desktop', 'server')
-		  AND (
-		    en.is_private = 0
-		    OR en.owner_user_id = ?
-		    OR EXISTS (
-		      SELECT 1 FROM exit_node_access ea
-		      WHERE ea.exit_node_id = en.id
-		        AND ea.grantee_user_id = ?
-		        AND ea.status = 'active'
-		    )
-		  )
+		  AND d.device_type IN ('desktop', 'server', 'mobile')
+		  AND en.owner_user_id = ?
 		ORDER BY en.country_code, d.device_name
-	`, session.UserID, session.UserID)
+	`, session.UserID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
 		return
@@ -241,6 +229,22 @@ func (h *AuthHandler) ListExitNodes(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []ExitNodeListItem{}
 	}
+	isHubExit := GetSetting(h.DB, "hub_is_exit_node", "false")
+	if isHubExit == "true" {
+		hubCountry := "IN"
+		list = append(list, ExitNodeListItem{
+			ID:          "hub",
+			DeviceID:    "hub-device",
+			DeviceName:  "Oracle Cloud Hub",
+			Label:       "Oracle Cloud Hub",
+			CountryCode: &hubCountry,
+			OwnerUserID: session.UserID,
+			Status:      "Online",
+			IsEnabled:   true,
+			IsPrivate:   false,
+		})
+	}
+
 	writeJSON(w, http.StatusOK, list)
 }
 
@@ -274,20 +278,7 @@ func (h *AuthHandler) GetExitNodeForConnect(exitNodeID, userID string) (overlayI
 		return "", "", "", fmt.Errorf("exit node device is not enrolled on the mesh yet — connect it once first")
 	}
 
-	canUse := ownerID == userID
-	if !canUse {
-		var allowed int
-		_ = h.DB.QueryRow(`
-			SELECT COUNT(1) FROM exit_nodes en
-			WHERE en.id = ?
-			  AND (en.is_private = 0 OR EXISTS (
-			    SELECT 1 FROM exit_node_access ea
-			    WHERE ea.exit_node_id = en.id AND ea.grantee_user_id = ? AND ea.status = 'active'
-			  ))
-		`, exitNodeID, userID).Scan(&allowed)
-		canUse = allowed > 0
-	}
-	if !canUse {
+	if ownerID != userID {
 		return "", "", "", fmt.Errorf("you do not have access to this exit node")
 	}
 

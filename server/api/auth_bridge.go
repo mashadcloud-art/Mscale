@@ -88,15 +88,7 @@ func (h *AuthHandler) BridgeLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    sessionID,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   r.TLS != nil,
-		Expires:  userExpires,
-	})
+	h.writeSessionCookie(w, r, sessionID, userExpires)
 
 	redirect := "/mscale/?desktop=1"
 	if strings.TrimSpace(r.URL.Query().Get("desktop")) != "1" {

@@ -3,7 +3,11 @@
 
 export function AdminLogout():Promise<string>;
 
-export function ConnectTunnel(arg1:string,arg2:string):Promise<string>;
+export function AdminAPIJSON(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function CheckForUpdateJSON():Promise<string>;
+
+export function ConnectTunnel(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function DisconnectTunnel():Promise<string>;
 
@@ -12,6 +16,8 @@ export function EnableAsExitNode(arg1:string,arg2:string):Promise<string>;
 export function ForceDisconnectTunnel():Promise<string>;
 
 export function GetAdminConsoleURL():Promise<string>;
+
+export function GetAppVersionJSON():Promise<string>;
 
 export function GetLoggedInUser():Promise<string>;
 

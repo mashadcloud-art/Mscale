@@ -339,6 +339,7 @@ func main() {
 	hub.db = sqlDB
 	go hub.Run()
 	go watchDeviceHeartbeats(sqlDB)
+	go api.RunDNSServer(sqlDB)
 
 	mux := http.NewServeMux()
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
@@ -372,6 +373,22 @@ func main() {
 	mux.HandleFunc("/api/exit-route/activate", authHandler.ActivateExitRoute)
 	mux.HandleFunc("/api/exit-route/deactivate", authHandler.DeactivateExitRoute)
 	mux.HandleFunc("/api/exit-route/ensure-by-key", authHandler.EnsureExitRouteByKey)
+
+	mux.HandleFunc("/api/devices/wake", authHandler.WakeDevice)
+	mux.HandleFunc("/api/devices/wake-config", authHandler.SetWakeConfig)
+	mux.HandleFunc("/api/devices/device-phone", authHandler.SetDevicePhone)
+	mux.HandleFunc("/api/devices/pending-command", authHandler.GetPendingCommand)
+	mux.HandleFunc("/api/devices/command-ack", authHandler.AckDeviceCommand)
+	mux.HandleFunc("/api/admin/route-device", authHandler.AdminRouteDevice)
+
+	// Settings
+	mux.HandleFunc("/api/settings", authHandler.GetSettings)
+	mux.HandleFunc("/api/settings/update", authHandler.UpdateSetting)
+
+	// ACLs
+	mux.HandleFunc("/api/acls", api.HandleACLs(sqlDB, authHandler))
+	mux.HandleFunc("/api/acls/", api.HandleACLDelete(sqlDB, authHandler))
+
 	mux.HandleFunc("/ws/devices", WsHandler(authHandler))
 
 	log.Printf("INFO: MScale server listening on :%s", port)

@@ -1,3 +1,11 @@
 build/bin
 node_modules
 frontend/dist
+
+# Stray build outputs
+*.exe
+!third_party/**/*.dll
+
+# Installer staging temp
+build/windows/installer/tmp/
+

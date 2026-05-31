@@ -25,7 +25,42 @@ func generateSessionID() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func (h *AuthHandler) CreateSession(w http.ResponseWriter, userID string) error {
+func sessionCookieSecure(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	if r.Header.Get("X-Forwarded-Proto") == "https" {
+		return true
+	}
+	return false
+}
+
+func (h *AuthHandler) writeSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string, expires time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    sessionID,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   sessionCookieSecure(r),
+		Expires:  expires,
+	})
+}
+
+func (h *AuthHandler) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   sessionCookieSecure(r),
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
+}
+
+func (h *AuthHandler) CreateSession(w http.ResponseWriter, r *http.Request, userID string) error {
 	sessionID, err := generateSessionID()
 	if err != nil {
 		return err
@@ -41,15 +76,7 @@ func (h *AuthHandler) CreateSession(w http.ResponseWriter, userID string) error 
 		return err
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    sessionID,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   false,
-		Expires:  expiresAt,
-	})
+	h.writeSessionCookie(w, r, sessionID, expiresAt)
 
 	return nil
 }
@@ -83,14 +110,5 @@ func (h *AuthHandler) ClearSession(w http.ResponseWriter, r *http.Request) {
 		_, _ = h.DB.Exec("DELETE FROM user_sessions WHERE id = ?", cookie.Value)
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   false,
-		MaxAge:   -1,
-		Expires:  time.Unix(0, 0),
-	})
+	h.clearSessionCookie(w, r)
 }

@@ -47,10 +47,25 @@ func (h *AuthHandler) ActivateExitRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	exitOverlay, exitPubKey, err := h.lookupExitPeerKeys(req.ExitNodeID, session.UserID)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
+	var exitOverlay, exitPubKey string
+	var exitB64 string
+	if req.ExitNodeID == "hub" {
+		exitOverlay = "100.64.0.1"
+		exitB64 = "hub"
+	} else {
+		o, p, err := h.lookupExitPeerKeys(req.ExitNodeID, session.UserID)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		exitOverlay = o
+		exitPubKey = p
+		b, err := normalizeWGPublicKey(exitPubKey)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid exit node public key"})
+			return
+		}
+		exitB64 = b
 	}
 
 	var clientOverlay, clientPubKey string
@@ -67,23 +82,20 @@ func (h *AuthHandler) ActivateExitRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	exitB64, err := normalizeWGPublicKey(exitPubKey)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid exit node public key"})
-		return
-	}
-
 	exitRouteMu.Lock()
 	defer exitRouteMu.Unlock()
 
-	// Bug 1: exit peer needs /32 + 0.0.0.0/1 + 128.0.0.0/1 (not /32 alone).
-	if err := syncExitNodePeer(exitOverlay, exitPubKey); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error":   "could not configure exit peer on hub",
-			"details": err.Error(),
-		})
-		return
+	if req.ExitNodeID != "hub" {
+		// Bug 1: exit peer needs /32 + 0.0.0.0/1 + 128.0.0.0/1 (not /32 alone).
+		if err := syncExitNodePeer(exitOverlay, exitPubKey); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error":   "could not configure exit peer on hub",
+				"details": err.Error(),
+			})
+			return
+		}
 	}
+
 	if err := syncWGPeer(clientOverlay, clientPubKey, ""); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error":   "could not configure client peer on hub",
@@ -101,13 +113,20 @@ func (h *AuthHandler) ActivateExitRoute(w http.ResponseWriter, r *http.Request) 
 	if activeExitClientIP != "" && activeExitClientIP != clientOverlay {
 		clearClientExitPolicy(activeExitClientIP)
 	}
-	if err := ensureClientExitPolicy(clientOverlay); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error":   "hub exit policy failed (sudo ip rule/route on ph)",
-			"details": err.Error(),
-		})
-		return
+
+	if req.ExitNodeID != "hub" {
+		if err := ensureClientExitPolicy(clientOverlay); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error":   "hub exit policy failed (sudo ip rule/route on ph)",
+				"details": err.Error(),
+			})
+			return
+		}
+	} else {
+		// Clear it just in case it was set previously
+		clearClientExitPolicy(clientOverlay)
 	}
+
 	if err := ensureHubExitNAT(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error":   "hub NAT setup failed",
@@ -135,26 +154,42 @@ func (h *AuthHandler) ActivateExitRoute(w http.ResponseWriter, r *http.Request) 
 
 // reapplyExitRouteForDevice restores hub exit policy after reconnect (enroll path).
 func (h *AuthHandler) reapplyExitRouteForDevice(deviceID, exitNodeID, userID string) error {
-	exitOverlay, exitPubKey, err := h.lookupExitPeerKeys(exitNodeID, userID)
-	if err != nil {
-		return err
+	var exitOverlay, exitPubKey string
+	var exitB64 string
+
+	if exitNodeID == "hub" {
+		exitOverlay = "100.64.0.1"
+		exitB64 = "hub"
+	} else {
+		o, p, err := h.lookupExitPeerKeys(exitNodeID, userID)
+		if err != nil {
+			return err
+		}
+		exitOverlay = o
+		exitPubKey = p
+		b, err := normalizeWGPublicKey(exitPubKey)
+		if err != nil {
+			return err
+		}
+		exitB64 = b
 	}
+
 	var clientOverlay, clientPubKey string
-	err = h.DB.QueryRow(
+	err := h.DB.QueryRow(
 		`SELECT overlay_ip, public_key FROM devices WHERE id = ? AND user_id = ?`,
 		deviceID, userID,
 	).Scan(&clientOverlay, &clientPubKey)
 	if err != nil || clientOverlay == "" {
 		return fmt.Errorf("client not enrolled")
 	}
-	exitB64, err := normalizeWGPublicKey(exitPubKey)
-	if err != nil {
-		return err
-	}
+
 	exitRouteMu.Lock()
 	defer exitRouteMu.Unlock()
-	if err := syncExitNodePeer(exitOverlay, exitPubKey); err != nil {
-		return err
+
+	if exitNodeID != "hub" {
+		if err := syncExitNodePeer(exitOverlay, exitPubKey); err != nil {
+			return err
+		}
 	}
 	if err := syncWGPeer(clientOverlay, clientPubKey, ""); err != nil {
 		return err
@@ -163,9 +198,15 @@ func (h *AuthHandler) reapplyExitRouteForDevice(deviceID, exitNodeID, userID str
 	if activeExitClientIP != "" && activeExitClientIP != clientOverlay {
 		clearClientExitPolicy(activeExitClientIP)
 	}
-	if err := ensureClientExitPolicy(clientOverlay); err != nil {
-		return err
+
+	if exitNodeID != "hub" {
+		if err := ensureClientExitPolicy(clientOverlay); err != nil {
+			return err
+		}
+	} else {
+		clearClientExitPolicy(clientOverlay)
 	}
+
 	_ = ensureHubExitNAT()
 	activeExitPeer = exitB64
 	activeExitOverlay = exitOverlay
@@ -215,13 +256,15 @@ func (h *AuthHandler) DeactivateExitRoute(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]string{"message": "exit routing deactivated"})
 }
 
-// ensureHubExitForwarding allows WireGuard peers on wg0 to forward traffic (client -> exit node).
+// ensureHubExitForwarding allows WireGuard peers on wg0 to forward traffic (client -> exit node or internet).
 func ensureHubExitForwarding() error {
 	rules := [][]string{
-		{"-C", "FORWARD", "-i", "wg0", "-o", "wg0", "-j", "ACCEPT"},
-		{"-A", "FORWARD", "-i", "wg0", "-o", "wg0", "-j", "ACCEPT"},
-		{"-C", "FORWARD", "-i", "wg0", "-o", "wg0", "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"},
-		{"-A", "FORWARD", "-i", "wg0", "-o", "wg0", "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"},
+		{"-C", "FORWARD", "-i", "wg0", "-j", "ACCEPT"},
+		{"-A", "FORWARD", "-i", "wg0", "-j", "ACCEPT"},
+		{"-C", "FORWARD", "-i", "wg0", "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"},
+		{"-A", "FORWARD", "-i", "wg0", "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"},
+		{"-C", "FORWARD", "-o", "wg0", "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"},
+		{"-A", "FORWARD", "-o", "wg0", "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"},
 	}
 	for i := 0; i < len(rules); i += 2 {
 		check := append([]string{"iptables"}, rules[i]...)

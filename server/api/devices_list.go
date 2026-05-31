@@ -34,8 +34,11 @@ type DeviceListItem struct {
 	EndpointIP *string `json:"endpoint_ip,omitempty"`
 	EnrolledAt string  `json:"enrolled_at"`
 	LastSeenAt *string `json:"last_seen_at,omitempty"`
-	Status     string  `json:"status"`
-	ExitNode   *ExitNodeSummary `json:"exit_node,omitempty"`
+	Status            string  `json:"status"`
+	WakeRemoteEnabled bool    `json:"wake_remote_enabled"`
+	WakeCallNumbers   string  `json:"wake_call_numbers,omitempty"`
+	DevicePhone       string  `json:"device_phone,omitempty"`
+	ExitNode          *ExitNodeSummary `json:"exit_node,omitempty"`
 }
 
 func (h *AuthHandler) ListDevices(w http.ResponseWriter, r *http.Request) {
