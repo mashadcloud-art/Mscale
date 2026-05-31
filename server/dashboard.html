@@ -957,7 +957,12 @@
                     return { ok: false, status: 503, json: async () => ({ error: String(e) }) };
                 }
             }
-            return fetch(apiPathPrefix() + path, { credentials: 'include', method, body, headers: body ? {'Content-Type':'application/json'} : {} });
+            const fetchOpts = { credentials: 'include', method };
+            if (body && method !== 'GET' && method !== 'HEAD') {
+                fetchOpts.body = body;
+                fetchOpts.headers = {'Content-Type':'application/json'};
+            }
+            return fetch(apiPathPrefix() + path, fetchOpts);
         }
         async function postAPI(path, payload) { const res = await apiFetch(path, { method: 'POST', body: JSON.stringify(payload) }); const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Request failed'); return data; }
         let actionDevice = null; let exitNodesCache = [];
