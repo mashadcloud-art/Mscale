@@ -12,78 +12,69 @@
 </head>
 <body id="body-root">
 
+    <div id="embedded-auth-gate" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--bg-base); align-items:center; justify-content:center; padding:2rem;">
+        <div style="max-width:420px; text-align:center; background:var(--bg-panel-solid); border:1px solid var(--border-solid); border-radius:16px; padding:2rem; box-shadow:var(--shadow-lg);">
+            <img src="assets/logo.png" alt="Mscale" width="48" height="48" style="border-radius:12px; margin:0 auto 1rem;">
+            <h2 style="font-size:1.25rem; font-weight:600; margin-bottom:0.5rem;">Sign in required</h2>
+            <p id="embedded-auth-message" class="text-sm text-muted" style="margin-bottom:1.5rem;">Admin could not reach the Mscale server. Sign in to the desktop app first, then reopen Admin Console.</p>
+            <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                <button type="button" onclick="requestAppSignIn()" class="btn btn-primary" style="width:100%;">Open app sign-in</button>
+                <button type="button" onclick="openAdminViaBrowser()" class="btn btn-outline" style="width:100%;">Open admin in browser</button>
+            </div>
+        </div>
+    </div>
+
     <div id="app">
         <aside class="sidebar">
             <div class="sidebar-header" style="flex-direction: column; align-items: flex-start; height: auto; padding: 1.5rem 1rem 0.5rem 1rem; margin-bottom: 0.5rem;">
                 <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-                    <a href="#" onclick="switchTab('machines');return false;" class="logo-block" style="text-decoration:none; display:flex; align-items:center; gap:0.5rem; flex:1; min-width:0;">
-                        <svg width="24" height="24" viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:var(--text-main); flex-shrink:0;">
-                            <circle opacity="0.2" cx="3.4" cy="3.25" r="2.7" fill="currentColor"></circle>
-                            <circle cx="3.4" cy="11.3" r="2.7" fill="currentColor"></circle>
-                            <circle opacity="0.2" cx="3.4" cy="19.5" r="2.7" fill="currentColor"></circle>
-                            <circle cx="11.5" cy="11.3" r="2.7" fill="currentColor"></circle>
-                            <circle cx="11.5" cy="19.5" r="2.7" fill="currentColor"></circle>
-                            <circle opacity="0.2" cx="11.5" cy="3.25" r="2.7" fill="currentColor"></circle>
-                            <circle opacity="0.2" cx="19.5" cy="3.25" r="2.7" fill="currentColor"></circle>
-                            <circle cx="19.5" cy="11.3" r="2.7" fill="currentColor"></circle>
-                            <circle opacity="0.2" cx="19.5" cy="19.5" r="2.7" fill="currentColor"></circle>
-                        </svg>
-                        <div style="font-size:0.95rem; font-weight:600; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                            mashadcloud@gmail.com
+                    <a href="#" onclick="switchTab('machines');return false;" class="logo-block" style="text-decoration:none; display:flex; align-items:center; gap:0.625rem; flex:1; min-width:0;">
+                        <img id="brand-logo" src="assets/logo.png" alt="Mscale" class="logo-img" width="32" height="32">
+                        <div style="min-width:0;">
+                            <div style="font-size:0.95rem; font-weight:600; color:var(--text-main);">Mscale</div>
+                            <div class="text-xs text-muted">Admin Console</div>
                         </div>
                     </a>
                 </div>
-                <div style="margin-top: 0.5rem; padding-left: 2rem;">
+                <div style="margin-top: 0.5rem; padding-left: 2.5rem;">
                     <span class="badge badge-muted" style="font-size:0.7rem; padding:0.1rem 0.3rem;">Free</span>
                 </div>
             </div>
             <nav class="sidebar-nav">
-                <a onclick="switchTab('machines')" id="tab-machines" class="nav-item active">
+                <a href="#" onclick="switchTab('machines'); return false;" id="tab-machines" class="nav-item active">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"></rect><rect width="20" height="8" x="2" y="14" rx="2" ry="2"></rect><line x1="6" x2="6.01" y1="6" y2="6"></line><line x1="6" x2="6.01" y1="18" y2="18"></line></svg> 
                     Machines
                 </a>
-                <a onclick="switchTab('apps')" id="tab-apps" class="nav-item">
+                <a href="#" onclick="switchTab('apps'); return false;" id="tab-apps" class="nav-item">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"></path><rect x="3" y="14" width="7" height="7" rx="1"></rect><circle cx="17.5" cy="17.5" r="3.5"></circle></svg> 
                     Apps
                 </a>
-                <a onclick="switchTab('services')" id="tab-services" class="nav-item">
+                <a href="#" onclick="switchTab('services'); return false;" id="tab-services" class="nav-item">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="4.5" r="2.5"></circle><path d="m10.2 6.3-3.9 3.9"></path><circle cx="4.5" cy="12" r="2.5"></circle><path d="M7 12h10"></path><circle cx="19.5" cy="12" r="2.5"></circle><path d="m13.8 17.7 3.9-3.9"></path><circle cx="12" cy="19.5" r="2.5"></circle></svg> 
                     Services
                 </a>
-                <a onclick="switchTab('users')" id="tab-users" class="nav-item">
+                <a href="#" onclick="switchTab('users'); return false;" id="tab-users" class="nav-item">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg> 
                     Users
                 </a>
-                <a onclick="switchTab('acls')" id="tab-acls" class="nav-item">
+                <a href="#" onclick="switchTab('acls'); return false;" id="tab-acls" class="nav-item">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> 
                     Access controls
                 </a>
-                                <a onclick="switchTab('logs')" id="tab-logs" class="nav-item">
+                <a href="#" onclick="switchTab('logs'); return false;" id="tab-logs" class="nav-item">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"></path></svg> 
                     Logs
                 </a>
-                <a onclick="switchTab('dns')" id="tab-dns" class="nav-item">
+                <a href="#" onclick="switchTab('dns'); return false;" id="tab-dns" class="nav-item">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg> 
                     DNS
                 </a>
-                <a onclick="switchTab('settings')" id="tab-settings" class="nav-item">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg> 
-                    Settings
-                </a>
-                                <a onclick="switchTab('logs')" id="tab-logs" class="nav-item">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"></path></svg> 
-                    Logs
-                </a>
-                <a onclick="switchTab('dns')" id="tab-dns" class="nav-item">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg> 
-                    DNS
-                </a>
-                <a onclick="switchTab('settings')" id="tab-settings" class="nav-item">
+                <a href="#" onclick="switchTab('settings'); return false;" id="tab-settings" class="nav-item">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg> 
                     Settings
                 </a>
                 <div style="flex-grow:1;"></div>
-                <a onclick="openResourceHub()" class="nav-item">
+                <a href="#" onclick="openResourceHub(); return false;" class="nav-item">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg> 
                     Resource hub
                 </a>
@@ -92,8 +83,9 @@
                 <button id="profileButton" class="user-profile-btn" onclick="toggleProfileDropdown(event)">
                     <div id="profile-initials" class="avatar">MH</div>
                     <div style="flex:1; overflow:hidden;">
-                        <div id="user-email-header" class="text-sm" style="font-weight:600; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; color:var(--text-main);">Loading…</div>
+                        <div id="profile-email-dd-main" class="text-sm" style="font-weight:600; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; color:var(--text-main);">Loading&hellip;</div>
                         <div class="text-xs text-muted">Admin Console</div>
+                        <div id="release-sidebar-info" class="text-xs text-muted" style="margin-top:0.25rem;">Apps — loading…</div>
                     </div>
                 </button>
                 <div id="profileDropdown" class="glass-panel hidden" style="position:absolute; left:1rem; bottom:4.5rem; width:calc(100% - 2rem); z-index:50;">
@@ -110,8 +102,8 @@
             <header class="topbar">
                 <div class="flex items-center gap-3">
                     <button onclick="toggleDarkMode()" class="btn-icon" aria-label="Toggle Theme" title="Toggle dark/light mode">
-                        <svg id="sun-icon" class="hidden" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
-                        <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+                        <svg class="theme-icon-sun hidden" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+                        <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
                     </button>
                     
                     <button onclick="openHelpModal()" class="btn-icon" aria-label="Help menu">
@@ -153,6 +145,7 @@
                         <span class="badge badge-success" style="margin-bottom:0.75rem;">Quick Start</span>
                         <h2 style="font-size:1.5rem; margin-bottom:0.5rem;">Connect your ecosystem devices</h2>
                         <p class="text-sm text-muted" style="margin-bottom:1rem;">Add desktop, mobile, or cloud nodes to your Mscale mesh. Use <strong>Wake / manage</strong> to open the app remotely.</p>
+                        <p id="release-versions-banner" class="text-xs font-semibold" style="color:var(--primary); margin-bottom:0.75rem;">Latest releases — loading…</p>
                         <div class="flex gap-3">
                             <button onclick="openAddDeviceModal()" class="btn btn-primary">Add device</button>
                             <a href="download.html" class="btn btn-outline" style="text-decoration:none;">Download apps</a>
@@ -391,7 +384,7 @@
                         <tbody>
                             <tr>
                                 <td>Today at 10:45 AM</td>
-                                <td>mashadcloud@gmail.com</td>
+                                <td id="users-demo-email">&mdash;</td>
                                 <td><span class="badge badge-success">Approved</span> node connection</td>
                                 <td class="font-mono">k8s-worker-node-01</td>
                             </tr>
@@ -417,7 +410,7 @@
                     <h2 style="font-size:1.125rem; font-weight:600; margin-bottom:0.5rem;">Network DNS name</h2>
                     <p class="text-sm text-muted" style="margin-bottom:1rem;">This unique name is used when registering DNS entries, sharing your device to other Networks, and issuing TLS certificates.</p>
                     <div class="input-with-icon" style="max-width:300px; margin-bottom:1rem;">
-                        <input type="text" readonly value="mashadcloud.mscale.net" class="input-field font-mono" style="background:var(--bg-app);">
+                        <input type="text" readonly value="your-network.mscale.net" class="input-field font-mono" style="background:var(--bg-app);">
                     </div>
                     <button class="btn btn-outline text-xs">Rename Network...</button>
                 </section>
@@ -502,7 +495,16 @@
                         <div style="margin-bottom:2.5rem;">
                             <h3 style="font-size:1.125rem; font-weight:600; margin-bottom:1rem;">Display</h3>
                             <div class="text-sm text-muted" style="margin-bottom:1rem;">Set a display name to easily recognize this Network.</div>
-                            <input type="text" value="mashadcloud@gmail.com" class="input-field" style="max-width:300px;">
+                            <input type="text" id="settings-display-name" value="" placeholder="Network display name" class="input-field" style="max-width:300px;">
+                        </div>
+
+                        <!-- Client app releases -->
+                        <div style="margin-bottom:2.5rem;">
+                            <h3 style="font-size:1.125rem; font-weight:600; margin-bottom:1rem;">Client apps</h3>
+                            <p class="text-sm text-muted" style="margin-bottom:1rem;">Latest Mscale builds for desktop and mobile. Pulled live from the release server.</p>
+                            <div id="client-releases-panel" class="glass-panel" style="padding:1rem;">
+                                <p class="text-sm text-muted">Loading release info…</p>
+                            </div>
                         </div>
 
                         <!-- Regional Routing -->
@@ -661,16 +663,206 @@
         let currentUser = null;
 
         function isEmbeddedAdmin() { return new URLSearchParams(window.location.search).get('embedded') === '1'; }
+
+        let _rpcSeq = 0;
+        const _rpcWait = new Map();
+
+        function initDesktopRpcListener() {
+            if (window.__mscaleRpcReady) return;
+            window.__mscaleRpcReady = true;
+            window.addEventListener('message', (event) => {
+                const data = event.data;
+                if (!data || data.type !== 'mscale-admin-rpc-result') return;
+                const pending = _rpcWait.get(data.id);
+                if (!pending) return;
+                _rpcWait.delete(data.id);
+                if (data.error) pending.reject(new Error(data.error));
+                else pending.resolve(data.result);
+            });
+        }
+
+        let desktopBridgeReady = false;
+
+        function hasDesktopBridge() {
+            if (isEmbeddedAdmin()) return desktopBridgeReady;
+            return !!(window.go && window.go.main && window.go.main.App);
+        }
+
+        async function verifyDesktopBridge() {
+            if (!isEmbeddedAdmin()) {
+                desktopBridgeReady = false;
+                return true;
+            }
+            initDesktopRpcListener();
+            try {
+                const json = await desktopRpc('GetSessionUserJSON');
+                desktopBridgeReady = !!json;
+                return desktopBridgeReady;
+            } catch (e) {
+                console.error('Desktop bridge verify failed', e);
+                desktopBridgeReady = false;
+                return false;
+            }
+        }
+
+        function showEmbeddedAuthGate(message) {
+            const gate = document.getElementById('embedded-auth-gate');
+            const app = document.getElementById('app');
+            const msg = document.getElementById('embedded-auth-message');
+            if (msg && message) msg.textContent = message;
+            if (gate) gate.style.display = 'flex';
+            if (app) app.style.display = 'none';
+        }
+
+        function requestAppSignIn() {
+            window.parent.postMessage({ type: 'mscale-admin-request-signin' }, '*');
+        }
+
+        function openAdminViaBrowser() {
+            window.parent.postMessage({ type: 'mscale-admin-open-browser' }, '*');
+        }
+
+        async function ensureWebSession() {
+            if (isEmbeddedAdmin() || isDesktopApp()) return true;
+            try {
+                const res = await fetch(apiPathPrefix() + '/api/me', { credentials: 'include', cache: 'no-store' });
+                if (res.status === 401) {
+                    const redirect = encodeURIComponent(window.location.pathname + window.location.search);
+                    window.location.replace(apiPathPrefix() + '/login.html?redirect=' + redirect);
+                    return false;
+                }
+                return res.ok;
+            } catch (e) {
+                console.error('Web session check failed', e);
+                setConnectionStatus('Cannot reach server', true);
+                return false;
+            }
+        }
+
+        function desktopRpc(method, ...args) {
+            initDesktopRpcListener();
+            if (isEmbeddedAdmin()) {
+                return new Promise((resolve, reject) => {
+                    const id = ++_rpcSeq;
+                    _rpcWait.set(id, { resolve, reject });
+                    try {
+                        window.parent.postMessage({ type: 'mscale-admin-rpc', id, method, args }, '*');
+                    } catch (err) {
+                        _rpcWait.delete(id);
+                        reject(err);
+                        return;
+                    }
+                    setTimeout(() => {
+                        if (_rpcWait.has(id)) {
+                            _rpcWait.delete(id);
+                            reject(new Error('Desktop bridge timeout: ' + method));
+                        }
+                    }, 30000);
+                });
+            }
+            const app = window.go && window.go.main && window.go.main.App;
+            if (app && typeof app[method] === 'function') {
+                return Promise.resolve(app[method](...args));
+            }
+            return Promise.reject(new Error('Desktop app bridge unavailable'));
+        }
+
+        async function callAdminAPI(path, method, body) {
+            const raw = await desktopRpc('AdminAPIJSON', path, method, body || '');
+            return JSON.parse(raw || '{"status":503,"body":{"error":"empty response"}}');
+        }
+
+        function setConnectionStatus(message, isError) {
+            const el = document.getElementById('release-sidebar-info');
+            if (el) {
+                el.textContent = message;
+                el.style.color = isError ? 'var(--danger)' : '';
+            }
+        }
+
         function getDesktopApp() { try { return window.go?.main?.App || window.parent?.go?.main?.App; } catch (_) { return null; } }
         function isDesktopApp() { return window.location.hostname === 'wails.localhost' || isEmbeddedAdmin() || !!getDesktopApp(); }
         function apiPathPrefix() { return window.location.pathname.startsWith('/mscale') ? '/mscale' : ''; }
-        function assetPath(name) { if (isDesktopApp() || isEmbeddedAdmin()) return name; const p = apiPathPrefix(); return p ? p + '/assets/' + name : 'assets/' + name; }
-        function applyAssetPaths() { const b = assetPath('cheetahbanner.png'); document.getElementById('banner-bg')?.setAttribute('src', b); }
+        function assetPath(name) {
+            if (isDesktopApp() || isEmbeddedAdmin()) return 'assets/' + name;
+            const p = apiPathPrefix();
+            return p ? p + '/assets/' + name : 'assets/' + name;
+        }
+        function applyAssetPaths() {
+            const logo = assetPath('logo.png');
+            document.getElementById('brand-logo')?.setAttribute('src', logo);
+            document.getElementById('banner-bg')?.setAttribute('src', assetPath('cheetahbanner.png'));
+            const favicon = document.querySelector('link[rel="icon"]');
+            if (favicon) favicon.href = assetPath('icon.png');
+        }
+
+        function releaseDownloadHref(url) {
+            if (!url) return 'download.html';
+            if (url.startsWith('http')) return url;
+            const prefix = apiPathPrefix();
+            return prefix ? prefix + '/' + url.replace(/^\//, '') : url;
+        }
+
+        async function loadAppReleases() {
+            const defaults = {
+                version: '0.4.37',
+                android_version: '1.0.12',
+                setup_url: 'https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.37.exe',
+                android_apk_url: 'https://mashad.shop/mscale/downloads/mscale-android-v1.0.12.apk',
+                notes: 'Exit-node ping test and faster exit poller.'
+            };
+            let rel = { ...defaults };
+            try {
+                const res = await apiFetch('/api/app/latest');
+                if (res.ok) rel = { ...defaults, ...(await res.json()) };
+            } catch (_) {}
+
+            const winVer = rel.version || defaults.version;
+            const apkVer = rel.android_version || defaults.android_version;
+            const winUrl = releaseDownloadHref(rel.setup_url || rel.download_url || defaults.setup_url);
+            const apkUrl = releaseDownloadHref(rel.android_apk_url || defaults.android_apk_url);
+            const notes = (rel.notes || defaults.notes || '').trim();
+
+            const banner = document.getElementById('release-versions-banner');
+            if (banner) banner.textContent = `Latest releases — Windows v${winVer} · Android v${apkVer}`;
+
+            const sidebar = document.getElementById('release-sidebar-info');
+            if (sidebar) sidebar.textContent = `Apps v${winVer} / v${apkVer}`;
+
+            const panel = document.getElementById('client-releases-panel');
+            if (panel) {
+                panel.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; padding-bottom:0.75rem; margin-bottom:0.75rem; border-bottom:1px solid var(--border-solid);">
+                        <div>
+                            <div class="font-medium">Windows desktop</div>
+                            <div class="text-xs text-muted" style="margin-top:0.25rem;">v${winVer}</div>
+                        </div>
+                        <a href="${winUrl}" class="btn btn-primary text-xs" style="text-decoration:none;">Download</a>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; padding-bottom:0.75rem; margin-bottom:0.75rem; border-bottom:1px solid var(--border-solid);">
+                        <div>
+                            <div class="font-medium">Android mobile</div>
+                            <div class="text-xs text-muted" style="margin-top:0.25rem;">v${apkVer}</div>
+                        </div>
+                        <a href="${apkUrl}" class="btn btn-primary text-xs" style="text-decoration:none; background:var(--success); border-color:var(--success);">Download APK</a>
+                    </div>
+                    <p class="text-xs text-muted" style="margin-bottom:0.75rem;">${notes}</p>
+                    <a href="${apiPathPrefix() ? apiPathPrefix() + '/download.html' : 'download.html'}" class="text-xs" style="color:var(--primary); font-weight:600; text-decoration:none;">Open download page →</a>
+                `;
+            }
+        }
+
         async function apiFetch(path, options = {}) {
-            const method = options.method || 'GET'; const body = options.body || '';
-            if (isDesktopApp() && getDesktopApp()?.AdminAPIJSON) {
-                const out = JSON.parse(await getDesktopApp().AdminAPIJSON(path, method, body) || '{}');
-                return { ok: out.status >= 200 && out.status < 300, status: out.status, json: async () => out.body };
+            const method = options.method || 'GET';
+            const body = options.body || '';
+            if (hasDesktopBridge()) {
+                try {
+                    const out = await callAdminAPI(path, method, body);
+                    return { ok: out.status >= 200 && out.status < 300, status: out.status, json: async () => out.body };
+                } catch (e) {
+                    console.error('AdminAPIJSON failed', path, e);
+                    return { ok: false, status: 503, json: async () => ({ error: String(e) }) };
+                }
             }
             return fetch(apiPathPrefix() + path, { credentials: 'include', method, body, headers: body ? {'Content-Type':'application/json'} : {} });
         }
@@ -680,22 +872,34 @@
 
         async function fetchUserProfile() {
             try {
-                if (isDesktopApp() && getDesktopApp()?.GetSessionUserJSON) {
-                    const json = await getDesktopApp().GetSessionUserJSON();
-                    if (!json) { window.location.replace(apiPathPrefix() + '/login.html?logout=1'); return; }
+                if (hasDesktopBridge()) {
+                    const json = await desktopRpc('GetSessionUserJSON');
+                    if (!json) {
+                        setConnectionStatus('Sign in via Mscale app first', true);
+                        return;
+                    }
                     currentUser = JSON.parse(json);
                 } else {
                     const res = await apiFetch('/api/me');
                     if (res.status === 401) { window.location.replace(apiPathPrefix() + '/login.html?logout=1'); return; }
-                    if (!res.ok) return;
+                    if (!res.ok) {
+                        setConnectionStatus('Cannot reach server', true);
+                        return;
+                    }
                     currentUser = await res.json();
                 }
-                document.getElementById('user-email-header').textContent = currentUser.email;
-                const pe = document.getElementById('profile-email-dd'); if (pe) pe.textContent = currentUser.email;
+                const email = currentUser.email || '';
+                document.getElementById('profile-email-dd-main').textContent = email || 'Signed in';
+                document.getElementById('profile-email-dd').textContent = email || '\u2014';
                 const pi = document.getElementById('profile-initials');
-                if (pi) pi.textContent = (currentUser.display_name || currentUser.email || 'MA').substring(0, 2).toUpperCase();
+                if (pi) pi.textContent = (currentUser.display_name || email || 'MA').substring(0, 2).toUpperCase();
+                const settingsName = document.getElementById('settings-display-name');
+                if (settingsName) settingsName.value = currentUser.display_name || email || '';
+                const usersDemo = document.getElementById('users-demo-email');
+                if (usersDemo) usersDemo.textContent = email || '\u2014';
             } catch (e) {
                 console.error('Failed to fetch user profile', e);
+                setConnectionStatus('Server connection failed', true);
             }
         }
 
@@ -704,10 +908,14 @@
             document.getElementById('profileDropdown')?.classList.add('hidden');
             currentUser = null;
             try {
-                if (isDesktopApp() && getDesktopApp()?.AdminLogout) await getDesktopApp().AdminLogout();
+                if (hasDesktopBridge()) await desktopRpc('AdminLogout');
                 else await apiFetch('/api/auth/logout', { method: 'POST' });
             } catch (_) {}
             if (isDesktopApp() || sessionStorage.getItem('mscale_desktop') === '1') {
+                if (isEmbeddedAdmin()) {
+                    window.parent.postMessage({ type: 'mscale-admin-logout' }, '*');
+                    return;
+                }
                 window.location.replace('index.html?logout=1');
             } else {
                 window.location.replace(apiPathPrefix() + '/login.html?logout=1');
@@ -794,8 +1002,7 @@
 
         async function fetchDevices() {
             try {
-                const pathPrefix = window.location.pathname.startsWith('/mscale') ? '/mscale' : '';
-                const res = await fetch(`${pathPrefix}/api/devices`, { cache: 'no-store', credentials: 'include' });
+                const res = await apiFetch('/api/devices');
                 if (res.ok) {
                     applyDevices(await res.json());
                 }
@@ -807,6 +1014,9 @@
         let wsReconnectTimer = null;
 
         function initWebSocket() {
+            if (isEmbeddedAdmin() || (isDesktopApp() && hasDesktopBridge())) {
+                return;
+            }
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const pathPrefix = window.location.pathname.startsWith('/mscale') ? '/mscale' : '';
             const wsUrl = `${wsProtocol}//${window.location.host}${pathPrefix}/ws/devices`;
@@ -838,51 +1048,45 @@
             };
         }
 
+        function syncThemeIcons(isDark) {
+            document.querySelectorAll('.theme-icon-sun').forEach(el => el.classList.toggle('hidden', isDark));
+            document.querySelectorAll('.theme-icon-moon').forEach(el => el.classList.toggle('hidden', !isDark));
+        }
+
+        function initTheme() {
+            const saved = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const isDark = saved === 'dark' || (!saved && prefersDark);
+            if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+            else document.documentElement.removeAttribute('data-theme');
+            syncThemeIcons(isDark);
+        }
+
         // Dark Mode Logic
         function toggleDarkMode() {
-            const isCurrentlyDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            const isDark = !isCurrentlyDark;
-            if (isDark) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else {
-                document.documentElement.removeAttribute('data-theme');
-            }
+            const isDark = document.documentElement.getAttribute('data-theme') !== 'dark';
+            if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+            else document.documentElement.removeAttribute('data-theme');
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
-            
-            const sunIcon = document.getElementById('sun-icon');
-            const moonIcon = document.getElementById('moon-icon');
-            
-            if (!isDark) {
-                sunIcon.classList.add('hidden');
-                moonIcon.classList.remove('hidden');
-            } else {
-                sunIcon.classList.remove('hidden');
-                moonIcon.classList.add('hidden');
-            }
+            syncThemeIcons(isDark);
         }
         // Active Navigation Router Sim
         function switchTab(tabName) {
-            // Hide all panel views
-                        ['machines', 'apps', 'services', 'users', 'acls', 'logs', 'dns', 'settings'].forEach(id => {
+            ['machines', 'apps', 'services', 'users', 'acls', 'logs', 'dns', 'settings'].forEach(id => {
                 const view = document.getElementById('view-' + id);
                 if (view) view.classList.remove('active');
             });
 
-            // De-activate all tab header triggers
             const tabs = ['machines', 'apps', 'services', 'users', 'acls', 'logs', 'dns', 'settings'];
             tabs.forEach(t => {
-                const el = document.getElementById(`tab-${t}`);
-                if (el) {
-                    el.className = "nav-item";
-                }
+                const el = document.getElementById('tab-' + t);
+                if (el) el.className = 'nav-item';
             });
 
-            // Show and Activate target view
-            document.getElementById(`view-${tabName}`).classList.add('active');
-            const activeTab = document.getElementById(`tab-${tabName}`);
-            if (activeTab) {
-                activeTab.className = "nav-item active";
-            }
+            const targetView = document.getElementById('view-' + tabName);
+            if (targetView) targetView.classList.add('active');
+            const activeTab = document.getElementById('tab-' + tabName);
+            if (activeTab) activeTab.className = 'nav-item active';
         }
 
         // Render Table Rows
@@ -923,13 +1127,13 @@
                 const statusTextClass = isOnline ? 'style="color:var(--success); font-weight:500;"' : 'class="text-muted" style="font-weight:500;"';
                 const pulseClass = '';
 
-                const displayIp = m.overlay_ip || 'â€”';
-                const displayDNS = m.current_dns || 'â€”';
+                const displayIp = m.overlay_ip || '\u2014';
+                const displayDNS = m.current_dns || '\u2014';
                 const displayMode = formatRouting(m);
                 const platformLabel = (m.platform || 'unknown') + (m.device_type === 'server' ? ' server' : ' device');
                 const owner = m.owner_name || m.owner_email || (currentUser ? currentUser.display_name || currentUser.email : m.user_id);
                 const ownerEmail = m.owner_email || (currentUser ? currentUser.email : '');
-                const displayVersion = m.app_version ? `v${m.app_version}` : 'â€”';
+                const displayVersion = m.app_version ? `v${m.app_version}` : '\u2014';
                 const lastSeenLine = isOnline
                     ? 'Connected now'
                     : ('Last seen: ' + formatLastSeen(m.last_seen_at));
@@ -1114,7 +1318,7 @@
             actionDevice = machines.find(x => x.id === deviceId); if (!actionDevice) return;
             document.getElementById('action-device-id').value = deviceId;
             document.getElementById('device-actions-title').textContent = actionDevice.device_name || 'Wake / manage';
-            document.getElementById('action-device-status').textContent = (actionDevice.status || 'offline') + ' • ' + (actionDevice.platform || '');
+            document.getElementById('action-device-status').textContent = (actionDevice.status || 'offline') + ' \u2014 ' + (actionDevice.platform || '');
             document.getElementById('action-device-phone').value = actionDevice.device_phone || '';
             await loadExitNodesForActions();
             document.getElementById('modal-device-actions').classList.add('active');
@@ -1148,12 +1352,36 @@
 
         // Initialize: REST poll + WebSocket for instant connect/disconnect
         window.onload = async function() {
+            initDesktopRpcListener();
+
+            if (isEmbeddedAdmin()) {
+                const bridgeOk = await verifyDesktopBridge();
+                if (!bridgeOk) {
+                    showEmbeddedAuthGate('Could not connect admin to the Mscale server. Sign in to the desktop app, then try again.');
+                    return;
+                }
+            } else {
+                const ok = await ensureWebSession();
+                if (!ok) return;
+            }
+
+            initTheme();
             showDesktopBackButton();
+            applyAssetPaths();
+            await loadAppReleases();
             await fetchUserProfile();
             await fetchDevices();
             initWebSocket();
             setInterval(fetchDevices, 8000);
         };
+
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'mscale-admin-refresh') {
+                fetchUserProfile();
+                fetchDevices();
+                loadAppReleases();
+            }
+        });
     </script>
 </body>
 </html>

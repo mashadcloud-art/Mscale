@@ -1,9 +1,9 @@
 {
-  "version": "0.4.35",
-  "download_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.35.exe",
-  "setup_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.35.exe",
+  "version": "0.4.39",
+  "download_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.39.exe",
+  "setup_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.39.exe",
   "android_version": "1.0.12",
   "android_apk_url": "https://mashad.shop/mscale/downloads/mscale-android-v1.0.12.apk",
-  "notes": "v0.4.35 / v1.0.12: Exit-node ping test — PC sends notification to phone to confirm routing; faster exit poller.",
+  "notes": "v0.4.39: Fix admin login/session — web dashboard auth gate, desktop bridge verify, full data load.",
   "required": false
 }

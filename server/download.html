@@ -143,8 +143,8 @@ function relUrl(full) {
     if (res.ok) manifest = await res.json();
   } catch (_) {}
 
-  const winVer = manifest.version || '0.4.35';
-  const winUrl = relUrl(manifest.setup_url || manifest.download_url || 'downloads/MscaleSetup-v0.4.35.exe');
+  const winVer = manifest.version || '0.4.36';
+  const winUrl = relUrl(manifest.setup_url || manifest.download_url || 'downloads/MscaleSetup-v0.4.36.exe');
   const apkVer = manifest.android_version || '1.0.12';
   const apkUrl = relUrl(manifest.android_apk_url || 'downloads/mscale-android-v1.0.12.apk');
 

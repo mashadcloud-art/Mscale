@@ -19,10 +19,12 @@ Write-Host "Uploading to ph..."
 & $scp $bin ph:/tmp/mscale-server
 & $scp (Join-Path $PSScriptRoot "sudoers-mscale-hub.example") ph:/tmp/sudoers-mscale-hub.example
 & $scp (Join-Path $serverDir "dashboard.html") ph:/tmp/dashboard.html
+& $scp (Join-Path $serverDir "login.html") ph:/tmp/login.html
 
 Write-Host "Installing on ph..."
 & $ssh ph "sudo mv /tmp/mscale-server /home/ubuntu/mscale-server/mscale-server && sudo chmod 755 /home/ubuntu/mscale-server/mscale-server"
-& $ssh ph "sudo mv /tmp/dashboard.html /home/ubuntu/mscale-server/dashboard.html"
+& $ssh ph "sudo cp /tmp/dashboard.html /home/ubuntu/mscale-server/dashboard.html && sudo mv /tmp/dashboard.html /var/www/mscale/index.html && sudo chmod 644 /var/www/mscale/index.html"
+& $ssh ph "sudo cp /tmp/login.html /home/ubuntu/mscale-server/login.html && sudo mv /tmp/login.html /var/www/mscale/login.html && sudo chmod 644 /var/www/mscale/login.html"
 & $ssh ph "test -f /etc/sudoers.d/mscale-hub || (sudo cp /tmp/sudoers-mscale-hub.example /etc/sudoers.d/mscale-hub && sudo chmod 440 /etc/sudoers.d/mscale-hub && sudo visudo -cf /etc/sudoers.d/mscale-hub)"
 & $ssh ph "pm2 restart mscale-server 2>/dev/null || sudo systemctl restart mscale-server"
 & $ssh ph "curl -s -o /dev/null -w 'API HTTP %{http_code}' http://127.0.0.1:8081/api/me; echo"

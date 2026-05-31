@@ -89,11 +89,17 @@
         })();
 
         async function checkAlreadyLoggedIn() {
-            if (new URLSearchParams(window.location.search).get('logout') === '1') return;
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('logout') === '1') return;
             try {
                 const res = await fetch(API + '/me', { credentials: 'include' });
                 if (res.ok) {
-                    window.location.href = window.location.pathname.startsWith('/mscale') ? '/mscale/' : '/';
+                    const redirect = params.get('redirect');
+                    if (redirect && redirect.startsWith('/')) {
+                        window.location.href = redirect;
+                    } else {
+                        window.location.href = window.location.pathname.startsWith('/mscale') ? '/mscale/' : '/';
+                    }
                 }
             } catch (_) {}
         }
@@ -126,7 +132,13 @@
                 });
                 const data = await res.json().catch(() => ({}));
                 if (res.ok) {
-                    window.location.href = window.location.pathname.startsWith('/mscale') ? '/mscale/' : '/';
+                    const params = new URLSearchParams(window.location.search);
+                    const redirect = params.get('redirect');
+                    if (redirect && redirect.startsWith('/')) {
+                        window.location.href = redirect;
+                    } else {
+                        window.location.href = window.location.pathname.startsWith('/mscale') ? '/mscale/' : '/';
+                    }
                     return;
                 }
                 showError(data.error || 'Sign in failed. Check your credentials.');

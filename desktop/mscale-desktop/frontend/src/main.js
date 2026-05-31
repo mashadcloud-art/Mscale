@@ -435,13 +435,22 @@ async function loadSavedAccounts() {
     }
 }
 
-window.showNewAccountForm = function () {
+window.showNewAccountForm = async function () {
     hideLoginError();
-    document.getElementById('email')?.focus();
+    closeAdminConsole(false);
+    try {
+        if (window.go?.main?.App?.IsLoggedIn && window.go?.main?.App?.Logout) {
+            const loggedIn = await window.go.main.App.IsLoggedIn();
+            if (loggedIn) {
+                await window.go.main.App.Logout();
+            }
+        }
+    } catch (_) {}
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
     if (emailInput) emailInput.value = '';
     if (passwordInput) passwordInput.value = '';
+    emailInput?.focus();
 };
 
 window.switchToAccount = async function (email) {
@@ -467,6 +476,7 @@ window.switchToAccount = async function (email) {
     try {
         const result = await window.go.main.App.SwitchAccount(email);
         if (result.startsWith('Success')) {
+            closeAdminConsole(false);
             window.go.main.App.PrepareAdminSession?.().catch(() => {});
             showVpnAfterLogin();
         } else {
@@ -507,6 +517,7 @@ window.loginUser = function () {
         if (loginBtn) loginBtn.disabled = false;
         if (result.startsWith('Success')) {
             saveRememberEmail(email);
+            closeAdminConsole(false);
             window.go.main.App.PrepareAdminSession?.().catch(() => {});
             loadSavedAccounts();
             showVpnAfterLogin();
@@ -535,6 +546,7 @@ window.loginWithGoogle = function () {
 
     window.go.main.App.LoginWithGoogle().then(result => {
         if (result.startsWith('Success')) {
+            closeAdminConsole(false);
             window.go.main.App.PrepareAdminSession?.().catch(() => {});
             loadSavedAccounts();
             showVpnAfterLogin();
@@ -554,6 +566,7 @@ window.logoutUser = function () {
     setVpnActionsBusy(true);
 
     const wasConnected = isConnected;
+    closeAdminConsole(false);
     showLoginView();
 
     runBackgroundCleanup(async () => {
@@ -896,6 +909,7 @@ window.openAdminConsole = async function () {
             showLoginView();
             return;
         }
+        await window.go.main.App.PrepareAdminSession?.().catch(() => {});
     } catch (_) {}
 
     loading?.classList.remove('hidden');
@@ -906,8 +920,11 @@ window.openAdminConsole = async function () {
         loading?.classList.add('hidden');
     };
 
-    // Local admin uses the same Go session — no second login.
-    frame.src = '/admin.html?embedded=1&t=' + Date.now();
+    // Force fresh load so profile matches current login session.
+    frame.src = 'about:blank';
+    requestAnimationFrame(() => {
+        frame.src = '/admin.html?embedded=1&t=' + Date.now();
+    });
 };
 
 window.closeAdminConsole = function (restore = true) {
@@ -941,7 +958,24 @@ function initTheme() {
 function initAdminRpcBridge() {
     window.addEventListener('message', async (event) => {
         const data = event.data;
-        if (!data || data.type !== 'mscale-admin-rpc') return;
+        if (!data) return;
+
+        if (data.type === 'mscale-admin-request-signin') {
+            closeAdminConsole(false);
+            showLoginView();
+            return;
+        }
+        if (data.type === 'mscale-admin-logout') {
+            logoutUser();
+            return;
+        }
+        if (data.type === 'mscale-admin-open-browser') {
+            closeAdminConsole(false);
+            openAdminInBrowser();
+            return;
+        }
+
+        if (data.type !== 'mscale-admin-rpc') return;
 
         const frame = document.getElementById('admin-frame');
         if (!frame?.contentWindow || event.source !== frame.contentWindow) return;

@@ -180,7 +180,19 @@ func (a *App) fetchMe() (*meResponse, error) {
 	return &me, nil
 }
 
+func (a *App) prepareForNewLogin() {
+	a.stopHeartbeat()
+	if a.assignedIP != "" || a.wgEngine != nil {
+		a.teardownTunnel()
+	}
+	a.clearSessionCookies()
+	a.loggedInUser = ""
+	a.currentUserEmail = ""
+}
+
 func (a *App) Login(email string, password string) string {
+	a.prepareForNewLogin()
+
 	payload := map[string]string{
 		"email":    strings.TrimSpace(email),
 		"password": password,

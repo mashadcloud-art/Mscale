@@ -11,6 +11,8 @@ import (
 )
 
 func (a *App) LoginWithGoogle() string {
+	a.prepareForNewLogin()
+
 	sessionID := fmt.Sprintf("%d", time.Now().UnixNano())
 	authURL := fmt.Sprintf("%s/api/auth/google/login?type=desktop&session=%s", adminConsoleURL, sessionID)
 
