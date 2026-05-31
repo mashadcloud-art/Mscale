@@ -25,6 +25,113 @@ const statIp = document.getElementById('stat-ip');
 
 const REMEMBER_EMAIL_KEY = 'mscale_remember_email';
 const SAVED_EMAIL_KEY = 'mscale_saved_email';
+const SHARE_AS_EXIT_KEY = 'mscale_share_as_exit';
+const EXIT_PROMPT_SHOWN_KEY = 'mscale_exit_prompt_shown';
+
+let shareAsExit = localStorage.getItem(SHARE_AS_EXIT_KEY) === '1';
+
+function updateExitShareUI() {
+    const toggle = document.getElementById('exit-share-toggle');
+    const hint = document.getElementById('exit-share-hint');
+    const cardInner = document.getElementById('exit-share-card-inner');
+    const routingCard = document.getElementById('routing-mode-card');
+    if (toggle) toggle.checked = shareAsExit;
+    if (hint) {
+        if (shareAsExit && isConnected) {
+            hint.textContent = 'Active — other devices can use this PC';
+        } else if (shareAsExit) {
+            hint.textContent = 'Connecting… keep the app open';
+        } else {
+            hint.textContent = 'Share this PC\'s internet with your other devices';
+        }
+    }
+    if (cardInner) {
+        cardInner.classList.toggle('ring-2', shareAsExit);
+        cardInner.classList.toggle('ring-indigo-400/50', shareAsExit);
+        cardInner.classList.toggle('bg-indigo-50', shareAsExit);
+        cardInner.classList.toggle('dark:bg-indigo-950/30', shareAsExit);
+    }
+    routingCard?.classList.toggle('hidden', shareAsExit);
+}
+
+function showExitPromptIfNeeded() {
+    if (localStorage.getItem(EXIT_PROMPT_SHOWN_KEY) === '1') return;
+    const modal = document.getElementById('exit-prompt-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+window.dismissExitPrompt = function (enable) {
+    localStorage.setItem(EXIT_PROMPT_SHOWN_KEY, '1');
+    const modal = document.getElementById('exit-prompt-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+    if (enable) {
+        window.toggleShareAsExit(true);
+    }
+};
+
+window.toggleShareAsExit = async function (enabled) {
+    if (actionBusy) {
+        updateExitShareUI();
+        return;
+    }
+    if (!window.go?.main?.App?.SetShareAsExit) {
+        alert('Exit node requires a rebuilt desktop app.');
+        updateExitShareUI();
+        return;
+    }
+
+    actionBusy = true;
+    setVpnActionsBusy(true);
+    shareAsExit = enabled;
+    localStorage.setItem(SHARE_AS_EXIT_KEY, enabled ? '1' : '0');
+    updateExitShareUI();
+
+    if (enabled) {
+        currentMode = 'mesh';
+        currentExitNodeID = '';
+        if (statusText) statusText.innerText = 'Connecting exit node...';
+    } else if (statusText) {
+        statusText.innerText = 'Disconnecting...';
+    }
+
+    try {
+        const result = await window.go.main.App.SetShareAsExit(enabled, '');
+        if (result.startsWith('Error')) {
+            alert(result);
+            shareAsExit = false;
+            localStorage.setItem(SHARE_AS_EXIT_KEY, '0');
+            if (statusText) statusText.innerText = 'Disconnected';
+            resetVpnConnectionUI();
+        } else if (enabled) {
+            applyConnectedUI(result.split('\n')[0].includes('Assigned IP') ? result : 'Exit node active — ' + result);
+            window.go.main.App.GetStatus().then(s => {
+                if (s.includes('Exit node') || s.startsWith('Connected')) applyConnectedUI(s);
+            }).catch(() => {});
+        } else {
+            resetVpnConnectionUI();
+            playVideo('/videos/login.mp4');
+            if (statusText) statusText.innerText = 'Disconnected';
+        }
+    } catch (err) {
+        alert('Exit node failed: ' + err);
+        shareAsExit = false;
+        localStorage.setItem(SHARE_AS_EXIT_KEY, '0');
+        resetVpnConnectionUI();
+    } finally {
+        actionBusy = false;
+        setVpnActionsBusy(false);
+        updateExitShareUI();
+    }
+};
+
+function maybeAutoConnectExitShare() {
+    if (!shareAsExit || isConnected || actionBusy) return;
+    if (!window.go?.main?.App?.SetShareAsExit) return;
+    setTimeout(() => window.toggleShareAsExit(true), 600);
+}
 
 function accountInitials(name) {
     const parts = (name || 'Account').trim().split(/\s+/).filter(Boolean);
@@ -91,6 +198,7 @@ function playVideo(src) {
 
 function resetVpnConnectionUI() {
     isConnected = false;
+    shareAsExit = localStorage.getItem(SHARE_AS_EXIT_KEY) === '1';
     connectBtn?.classList.remove('disconnect', 'connected');
     btnInner?.classList.remove('connected');
     btnOuter?.classList.remove('connected-ring');
@@ -101,11 +209,13 @@ function resetVpnConnectionUI() {
     if (statIp) statIp.innerText = '—';
     const statProto = document.getElementById('stat-proto');
     if (statProto) statProto.innerText = '—';
+    clearExitTestUI();
     const badge = document.getElementById('status-badge');
     if (badge) {
         badge.innerText = 'Ready';
         badge.classList.remove('connected-badge');
     }
+    updateVerifyExitButton();
 }
 
 function applyConnectedUI(status) {
@@ -133,23 +243,76 @@ function applyConnectedUI(status) {
 
     const badge = document.getElementById('status-badge');
     if (badge) {
-        badge.innerText = 'Connected';
+        badge.innerText = status.includes('Exit node') ? 'Exit node' : 'Connected';
         badge.classList.add('connected-badge');
     }
 
+    updateExitShareUI();
+    updateExitViaUI();
+    updateVerifyExitButton();
     playVideo('/videos/Connected.mp4');
+}
+
+function updateExitViaUI() {
+    const info = document.getElementById('exit-via-info');
+    const nameEl = document.getElementById('exit-via-device');
+    const activeLocation = document.getElementById('active-location');
+    const usingExit = isConnected && (currentMode === 'exit-via' || currentExitNodeID);
+    if (info) info.classList.toggle('hidden', !usingExit);
+    if (nameEl && usingExit) {
+        const label = activeLocation?.innerText?.trim();
+        nameEl.innerText = label && label !== 'Mesh Network Only' ? label : 'Selected exit device';
+    }
+}
+
+function clearExitTestUI() {
+    const panel = document.getElementById('exit-test-result');
+    if (panel) panel.classList.add('hidden');
+    const info = document.getElementById('exit-via-info');
+    if (info) info.classList.add('hidden');
+}
+
+function showExitTestResult(ok, title, detail) {
+    const panel = document.getElementById('exit-test-result');
+    const titleEl = document.getElementById('exit-test-title');
+    const detailEl = document.getElementById('exit-test-detail');
+    if (!panel || !titleEl || !detailEl) return;
+    panel.classList.remove('hidden');
+    panel.classList.toggle('bg-emerald-50', ok);
+    panel.classList.toggle('dark:bg-emerald-950/30', ok);
+    panel.classList.toggle('border-emerald-200', ok);
+    panel.classList.toggle('dark:border-emerald-900/40', ok);
+    panel.classList.toggle('bg-red-50', !ok);
+    panel.classList.toggle('dark:bg-red-950/30', !ok);
+    panel.classList.toggle('border-red-200', !ok);
+    panel.classList.toggle('dark:border-red-900/40', !ok);
+    titleEl.className = 'text-[10px] font-bold uppercase tracking-wider ' + (ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400');
+    titleEl.innerText = title;
+    detailEl.innerText = detail;
+}
+
+function updateVerifyExitButton() {
+    const btn = document.getElementById('verify-exit-btn');
+    if (!btn) return;
+    const show = isConnected && (currentMode === 'exit-via' || currentExitNodeID);
+    btn.classList.toggle('hidden', !show);
 }
 
 async function restoreVpnState() {
     if (!window.go?.main?.App?.GetStatus) return;
     try {
+        if (window.go?.main?.App?.GetShareAsExit) {
+            shareAsExit = await window.go.main.App.GetShareAsExit();
+            localStorage.setItem(SHARE_AS_EXIT_KEY, shareAsExit ? '1' : '0');
+        }
         const status = await window.go.main.App.GetStatus();
-        if (status.startsWith('Connected') || status.startsWith('Logged in')) {
+        if (status.startsWith('Connected') || status.startsWith('Logged in') || status.includes('Exit node')) {
             showVpnAfterLogin(false);
         }
-        if (status.startsWith('Connected')) {
+        if (status.startsWith('Connected') || status.includes('Exit node')) {
             applyConnectedUI(status);
         }
+        updateExitShareUI();
     } catch (_) {}
 }
 
@@ -165,6 +328,9 @@ function showVpnAfterLogin(playLoginVideo = true) {
         playVideo('/videos/login.mp4');
     }
     loadExitNodes();
+    updateExitShareUI();
+    showExitPromptIfNeeded();
+    maybeAutoConnectExitShare();
 
     if (window.go?.main?.App?.GetLoggedInUser) {
         window.go.main.App.GetLoggedInUser().then(user => {
@@ -431,6 +597,11 @@ window.switchAccountFromVpn = function () {
 window.toggleConnection = function () {
     if (actionBusy) return;
 
+    if (shareAsExit) {
+        window.toggleShareAsExit(!isConnected);
+        return;
+    }
+
     if (!isConnected) {
         actionBusy = true;
         connectBtn?.classList.add('action-busy');
@@ -455,6 +626,10 @@ window.toggleConnection = function () {
                 applyConnectedUI(result.split('\n')[0].startsWith('Assigned IP:')
                     ? `Connected — IP: ${result.split('\n')[0].replace('Assigned IP: ', '')}`
                     : 'Connected');
+                if (currentMode === 'exit-via') {
+                    updateVerifyExitButton();
+                    scheduleExitTestAfterConnect();
+                }
 
                 window.go.main.App.GetStatus().then(status => {
                     if (status.startsWith('Connected')) {
@@ -521,6 +696,7 @@ window.closeAllModals = function () {
 };
 
 window.selectRoutingMode = function (mode, name) {
+    if (shareAsExit) return;
     currentMode = mode;
     const activeLocationText = document.getElementById('active-location');
     if (activeLocationText) activeLocationText.innerText = name;
@@ -581,10 +757,66 @@ function renderNodes(nodes) {
 
 window.selectExitNode = function (id, label) {
     currentExitNodeID = id;
+    currentMode = 'exit-via';
     const activeLocationText = document.getElementById('active-location');
     if (activeLocationText) activeLocationText.innerText = label;
     window.closeModal('location-modal');
+    updateExitViaUI();
+    updateVerifyExitButton();
 };
+
+window.verifyExitConnection = async function (autoRun) {
+    if (!window.go?.main?.App?.VerifyExitRouteJSON) {
+        showExitTestResult(false, 'Update required', 'Rebuild the desktop app to use exit ping.');
+        return;
+    }
+    const btn = document.getElementById('verify-exit-btn');
+    const spinner = document.getElementById('verify-exit-spinner');
+    const label = document.getElementById('verify-exit-label');
+    if (btn) btn.disabled = true;
+    spinner?.classList.remove('hidden');
+    if (label) label.innerText = autoRun ? 'Testing exit route…' : 'Sending ping…';
+
+    try {
+        const raw = await window.go.main.App.VerifyExitRouteJSON();
+        const data = JSON.parse(raw || '{}');
+        if (data.error) {
+            const hint = data.hint ? '\n' + data.hint : '';
+            showExitTestResult(false, 'Not routed via exit', String(data.error) + hint);
+            if (!autoRun) alert(data.error + (data.hint ? '\n\n' + data.hint : ''));
+            return;
+        }
+        if (data.test_error) {
+            showExitTestResult(false, 'Ping failed', String(data.test_error));
+            return;
+        }
+
+        const exitName = data.exit_device || data.exit_device_name || 'exit device';
+        let detail = data.message || 'Exit route is active.';
+        if (data.notification) detail += '\n\n' + data.notification;
+        if (data.exit_overlay) detail += '\nVPN IP: ' + data.exit_overlay;
+        detail += '\n\nCheck your phone — you should get a notification within a few seconds.';
+
+        const sent = data.test_sent === true || !!data.command_id;
+        showExitTestResult(
+            sent,
+            sent ? 'Ping sent to ' + exitName : 'Route confirmed',
+            detail
+        );
+    } catch (e) {
+        showExitTestResult(false, 'Test failed', String(e));
+    } finally {
+        if (btn) btn.disabled = false;
+        spinner?.classList.add('hidden');
+        if (label) label.innerText = 'Ping exit device';
+    }
+};
+
+function scheduleExitTestAfterConnect() {
+    if (currentMode !== 'exit-via' || !currentExitNodeID || !isConnected) return;
+    updateExitViaUI();
+    setTimeout(() => verifyExitConnection(true), 2000);
+}
 
 window.selectDnsOption = function (val, text) {
     const hiddenInput = document.getElementById('setting-dns-mode');

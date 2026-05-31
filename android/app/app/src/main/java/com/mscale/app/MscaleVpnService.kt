@@ -31,7 +31,7 @@ class MscaleVpnService : VpnService() {
         }
     }
 
-    private fun promoteToForeground() {
+    private fun promoteToForeground(shareExit: Boolean) {
         val intent = Intent(this, MainActivity::class.java)
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             android.app.PendingIntent.FLAG_IMMUTABLE
@@ -39,9 +39,15 @@ class MscaleVpnService : VpnService() {
             0
         }
         val pendingIntent = android.app.PendingIntent.getActivity(this, 0, intent, flags)
+        val title = if (shareExit) "Mscale — Exit node active" else "Mscale VPN"
+        val text = if (shareExit) {
+            "This phone is sharing its internet with your other devices"
+        } else {
+            "Connected and securing traffic"
+        }
         val notification = androidx.core.app.NotificationCompat.Builder(this, "vpn_channel")
-            .setContentTitle("Mscale VPN")
-            .setContentText("Connected and securing traffic")
+            .setContentTitle(title)
+            .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_secure)
             .setContentIntent(pendingIntent)
             .build()
@@ -59,9 +65,10 @@ class MscaleVpnService : VpnService() {
         }
 
         synchronized(teardownLock) { isTearingDown = false }
-        promoteToForeground()
 
         val shareExit = intent?.getBooleanExtra(EXTRA_SHARE_EXIT, false) ?: false
+        promoteToForeground(shareExit)
+
         val token = intent?.getStringExtra(EXTRA_TOKEN).orEmpty()
         val exitNodeId = intent?.getStringExtra(EXTRA_EXIT_NODE_ID).orEmpty()
         val shareCountry = intent?.getStringExtra(EXTRA_SHARE_COUNTRY).orEmpty().ifEmpty { "IN" }
@@ -133,6 +140,14 @@ class MscaleVpnService : VpnService() {
                     Log.e(TAG, "StartTunnel failed: $err")
                     disconnectSync()
                     finishService()
+                } else {
+                    val registeredId = controller.getDeviceID()
+                    if (registeredId.isNotEmpty()) {
+                        WakePrefs.saveDeviceId(this@MscaleVpnService, registeredId)
+                    }
+                    if (shareExit) {
+                        ExitCommandPoller.start(this@MscaleVpnService)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "VPN error", e)
@@ -165,6 +180,7 @@ class MscaleVpnService : VpnService() {
     }
 
     private fun performDisconnect() {
+        ExitCommandPoller.stop()
         Thread {
             disconnectSync()
             finishService()

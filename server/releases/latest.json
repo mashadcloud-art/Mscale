@@ -1,9 +1,9 @@
 {
-  "version": "0.4.28",
-  "download_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.28.exe",
-  "setup_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.28.exe",
-  "android_version": "1.0.11",
-  "android_apk_url": "https://mashad.shop/mscale/downloads/mscale-android-v1.0.11.apk",
-  "notes": "v1.0.11: Fix exit-node routing and Indian IP; theme System/Light/Dark; show account email on profile.",
+  "version": "0.4.35",
+  "download_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.35.exe",
+  "setup_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.35.exe",
+  "android_version": "1.0.12",
+  "android_apk_url": "https://mashad.shop/mscale/downloads/mscale-android-v1.0.12.apk",
+  "notes": "v0.4.35 / v1.0.12: Exit-node ping test — PC sends notification to phone to confirm routing; faster exit poller.",
   "required": false
 }

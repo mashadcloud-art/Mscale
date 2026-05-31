@@ -1,11 +1,11 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "mscale-desktop",
-  "outputfilename": "mscale-desktop-v0.4.34",
+  "outputfilename": "mscale-desktop-v0.4.35",
   "info": {
     "companyName": "Mscale",
     "productName": "Mscale",
-    "productVersion": "0.4.34",
+    "productVersion": "0.4.35",
     "copyright": "Copyright © Mscale"
   },
   "frontend:install": "npm install",

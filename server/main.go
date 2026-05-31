@@ -373,6 +373,8 @@ func main() {
 	mux.HandleFunc("/api/exit-route/activate", authHandler.ActivateExitRoute)
 	mux.HandleFunc("/api/exit-route/deactivate", authHandler.DeactivateExitRoute)
 	mux.HandleFunc("/api/exit-route/ensure-by-key", authHandler.EnsureExitRouteByKey)
+	mux.HandleFunc("/api/exit-route/status", authHandler.ExitRouteStatus)
+	mux.HandleFunc("/api/exit-route/test", authHandler.TestExitRoute)
 
 	mux.HandleFunc("/api/devices/wake", authHandler.WakeDevice)
 	mux.HandleFunc("/api/devices/wake-config", authHandler.SetWakeConfig)
@@ -390,6 +392,8 @@ func main() {
 	mux.HandleFunc("/api/acls/", api.HandleACLDelete(sqlDB, authHandler))
 
 	mux.HandleFunc("/ws/devices", WsHandler(authHandler))
+
+	mux.HandleFunc("/api/app/latest", api.LatestAppRelease)
 
 	log.Printf("INFO: MScale server listening on :%s", port)
 	log.Printf("INFO: Routes: POST /register | POST /status/update | GET /peers | GET /health | WS /ws/devices | POST /api/auth/register | POST /api/auth/login | POST /api/auth/logout | GET /api/me | GET /api/me/device | POST /api/devices/register | GET /api/devices | POST /api/devices/enroll | POST /api/devices/update-key | POST /api/devices/update-meta")

@@ -66,7 +66,7 @@ object WakeApi {
             .put("command_id", commandId)
             .put("device_id", deviceId)
             .put("status", status)
-        val conn = open("POST", "/api/devices/command/ack", token, payload.toString())
+        val conn = open("POST", "/api/devices/command-ack", token, payload.toString())
         try {
             conn.responseCode
             readBody(conn, conn.responseCode)

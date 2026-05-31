@@ -171,6 +171,9 @@ func (c *VpnController) prepareMesh(token, deviceName, storageDir, exitNodeID st
 	}
 
 	if shareExit {
+		if exitMode != "proxy" {
+			exitMode = "proxy" // Android must use tun2socks to forward exit traffic to cellular/Wi‑Fi
+		}
 		if err := c.enableExitNode(token, deviceID, shareCountry); err != nil {
 			c.lastError = err.Error()
 			return ""

@@ -34,6 +34,7 @@ type App struct {
 	exitGatewayIP string
 	loggedInUser     string
 	currentUserEmail string
+	sharingExit      bool
 
 	wgEngine    *device.Device
 	tunDevice   tun.Device

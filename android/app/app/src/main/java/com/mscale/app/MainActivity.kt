@@ -8,6 +8,8 @@ import android.net.Uri
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -48,6 +50,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var vpnController: mscalecore.VpnController
     private var pendingWakeIntent: Intent? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
     
     // States that need to survive recomposition but be accessible to VpnService methods
     private var sessionToken by mutableStateOf("")
@@ -83,7 +86,9 @@ class MainActivity : ComponentActivity() {
 
         vpnController = mscalecore.Mscalecore.newVpnController()
         sessionToken = WakePrefs.getToken(this)
-        shareExitMode = WakePrefs.getRoutingMode(this).ifEmpty { "exit_node" }
+        shareAsExit = WakePrefs.isShareAsExit(this)
+        shareCountry = WakePrefs.getShareCountry(this).ifEmpty { defaultExitCountry() }
+        shareExitMode = WakePrefs.getRoutingMode(this).ifEmpty { "mesh" }
         selectedExitNodeId = WakePrefs.getSelectedExitNodeId(this)
         wakeRemoteEnabled = WakePrefs.isWakeEnabled(this)
         wakeOnAnyCall = WakePrefs.isWakeOnAnyCall(this)
@@ -127,15 +132,17 @@ class MainActivity : ComponentActivity() {
                             onExitNodeSelected = {
                                 selectedExitNodeId = it
                                 WakePrefs.setSelectedExitNodeId(this@MainActivity, it)
+                                if (shareAsExit) applyShareAsExit(false, autoConnect = false)
                             },
                             shareAsExit = shareAsExit,
-                            onShareAsExitChanged = { shareAsExit = it },
+                            onShareAsExitChanged = { applyShareAsExit(it) },
                             shareCountry = shareCountry,
                             onShareCountryChanged = { shareCountry = it },
                             shareExitMode = shareExitMode,
                             onShareExitModeChanged = {
                                 shareExitMode = it
                                 WakePrefs.setRoutingMode(this@MainActivity, it)
+                                if (it == "exit_node" && shareAsExit) applyShareAsExit(false, autoConnect = false)
                             },
                             dnsServer = dnsServer,
                             onDnsServerChanged = { 
@@ -240,19 +247,19 @@ class MainActivity : ComponentActivity() {
         }
         when (intent.getStringExtra(EXTRA_WAKE_ACTION).orEmpty().ifEmpty { "connect" }) {
             "enable_exit" -> {
-                shareAsExit = true
-                shareCountry = intent.getStringExtra(EXTRA_WAKE_COUNTRY).orEmpty().ifEmpty { "IN" }
-                selectedExitNodeId = ""
+                shareCountry = intent.getStringExtra(EXTRA_WAKE_COUNTRY).orEmpty().ifEmpty { defaultExitCountry() }
+                WakePrefs.setShareCountry(this, shareCountry)
+                applyShareAsExit(true, autoConnect = false)
             }
             "route_via" -> {
-                shareAsExit = false
+                applyShareAsExit(false, autoConnect = false)
                 selectedExitNodeId = intent.getStringExtra(EXTRA_WAKE_EXIT_NODE_ID).orEmpty()
                 shareExitMode = "exit_node"
                 WakePrefs.setRoutingMode(this, "exit_node")
                 WakePrefs.setSelectedExitNodeId(this, selectedExitNodeId)
             }
             "mesh" -> {
-                shareAsExit = false
+                applyShareAsExit(false, autoConnect = false)
                 selectedExitNodeId = ""
                 shareExitMode = "mesh"
                 WakePrefs.setRoutingMode(this, "mesh")
@@ -264,6 +271,40 @@ class MainActivity : ComponentActivity() {
             requestVpnPermission()
         }
         intent.removeExtra(EXTRA_AUTO_WAKE)
+    }
+
+    private fun defaultExitCountry(): String {
+        val cc = resources.configuration.locales[0].country.uppercase()
+        return if (cc.length == 2) cc else "IN"
+    }
+
+    /** Tailscale-style: toggle on → connect as exit node; toggle off → stop sharing. */
+    private fun applyShareAsExit(enabled: Boolean, autoConnect: Boolean = true) {
+        shareAsExit = enabled
+        WakePrefs.setShareAsExit(this, enabled)
+        if (enabled) {
+            if (shareCountry.isEmpty()) {
+                shareCountry = defaultExitCountry()
+                WakePrefs.setShareCountry(this, shareCountry)
+            }
+            shareExitMode = "mesh"
+            selectedExitNodeId = ""
+            WakePrefs.setRoutingMode(this, "mesh")
+            WakePrefs.setSelectedExitNodeId(this, "")
+            if (autoConnect) {
+                if (isConnectedState.value) {
+                    stopVpnService()
+                    mainHandler.postDelayed({ requestVpnPermission() }, 700)
+                } else {
+                    requestVpnPermission()
+                }
+            }
+        } else {
+            WakePrefs.setShareAsExit(this, false)
+            if (isConnectedState.value) {
+                stopVpnService()
+            }
+        }
     }
 
     private fun requestVpnPermission() {
@@ -289,7 +330,7 @@ class MainActivity : ComponentActivity() {
             putExtra(MscaleVpnService.EXTRA_TOKEN, sessionToken)
             putExtra(MscaleVpnService.EXTRA_SHARE_EXIT, shareAsExit)
             putExtra(MscaleVpnService.EXTRA_SHARE_COUNTRY, shareCountry)
-            putExtra(MscaleVpnService.EXTRA_EXIT_MODE, shareExitMode)
+            putExtra(MscaleVpnService.EXTRA_EXIT_MODE, if (shareAsExit) "proxy" else shareExitMode)
             putExtra(MscaleVpnService.EXTRA_DNS_SERVER, dnsServer)
             putExtra(MscaleVpnService.EXTRA_EXIT_NODE_ID, if (useExitRouting) selectedExitNodeId else "")
         }
@@ -298,11 +339,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopVpnService() {
+        val wasExitShare = shareAsExit
         val intent = Intent(this, MscaleVpnService::class.java).apply {
             action = MscaleVpnService.ACTION_DISCONNECT
         }
         startService(intent)
         isConnectedState.value = false
+        if (wasExitShare) {
+            shareAsExit = false
+            WakePrefs.setShareAsExit(this, false)
+        }
     }
     
     companion object {
@@ -349,6 +395,8 @@ fun DashboardScreen(
     var selectedExitLabel by remember { mutableStateOf("") }
     var selectedExitId by remember { mutableStateOf(WakePrefs.getSelectedExitNodeId(ctx)) }
     val exitOptions = remember { mutableStateListOf<ExitNodeOption>() }
+    var showExitPrompt by remember { mutableStateOf(false) }
+    var autoStartedExit by remember { mutableStateOf(false) }
     
     val userName = remember { WakePrefs.getUserName(ctx).ifEmpty { "User" } }
     val userEmail = remember { WakePrefs.getUserEmail(ctx) }
@@ -389,6 +437,20 @@ fun DashboardScreen(
     }
     
     LaunchedEffect(sessionToken) {
+        if (sessionToken.isNotEmpty() && !WakePrefs.hasSeenExitPrompt(ctx)) {
+            showExitPrompt = true
+        }
+    }
+
+    LaunchedEffect(sessionToken, shareAsExit) {
+        if (!autoStartedExit && sessionToken.isNotEmpty() && shareAsExit && !isConnected) {
+            autoStartedExit = true
+            kotlinx.coroutines.delay(600)
+            onConnectRequest()
+        }
+    }
+    
+    LaunchedEffect(sessionToken) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val jsonStr = vpnController.fetchExitNodes(sessionToken)
@@ -421,7 +483,7 @@ fun DashboardScreen(
                             onExitNodeSelected(savedId)
                             onShareExitModeChanged("exit_node")
                         }
-                    } else if (indiaId.isNotEmpty()) {
+                    } else if (indiaId.isNotEmpty() && !shareAsExit) {
                         selectedExitLabel = indiaLabel
                         selectedExitId = indiaId
                         onExitNodeSelected(indiaId)
@@ -444,6 +506,36 @@ fun DashboardScreen(
     val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
     val gradientPrimary = androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFF8B5CF6)))
     val gradientConnected = androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF059669), Color(0xFF10B981)))
+
+    if (showExitPrompt) {
+        AlertDialog(
+            onDismissRequest = {
+                WakePrefs.setExitPromptShown(ctx)
+                showExitPrompt = false
+            },
+            title = { Text("Run as exit node?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Allow other devices on your account to route internet traffic through this phone.\n\n" +
+                        "You can turn this on or off anytime from the home screen.",
+                    color = textSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    WakePrefs.setExitPromptShown(ctx)
+                    showExitPrompt = false
+                    onShareAsExitChanged(true)
+                }) { Text("Enable", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    WakePrefs.setExitPromptShown(ctx)
+                    showExitPrompt = false
+                }) { Text("Not now") }
+            }
+        )
+    }
 
     Scaffold(
         containerColor = bgDark,
@@ -482,6 +574,8 @@ fun DashboardScreen(
                     userEmail = userEmail,
                     userInitial = userInitial,
                     isConnected = isConnected,
+                    shareAsExit = shareAsExit,
+                    onShareAsExitChanged = onShareAsExitChanged,
                     routingMode = shareExitMode,
                     onRoutingModeChanged = onShareExitModeChanged,
                     isDark = isDark,
@@ -506,8 +600,6 @@ fun DashboardScreen(
                     isConnected = isConnected,
                     shareExitMode = shareExitMode,
                     onShareExitModeChanged = onShareExitModeChanged,
-                    shareAsExit = shareAsExit,
-                    onShareAsExitChanged = onShareAsExitChanged,
                     onExitSelected = { id, label ->
                         selectedExitId = id
                         selectedExitLabel = label
@@ -538,10 +630,6 @@ fun DashboardScreen(
                     },
                     dnsServer = dnsServer,
                     onDnsServerChanged = onDnsServerChanged,
-                    shareAsExit = shareAsExit,
-                    onShareAsExitChanged = onShareAsExitChanged,
-                    shareCountry = shareCountry,
-                    onShareCountryChanged = onShareCountryChanged,
                     wakeRemoteEnabled = wakeRemoteEnabled,
                     onWakeRemoteChanged = onWakeRemoteChanged,
                     deviceMyPhone = deviceMyPhone,
@@ -601,6 +689,8 @@ fun CollapsibleSection(
 fun HomeScreen(
     userName: String, userEmail: String, userInitial: String,
     isConnected: Boolean,
+    shareAsExit: Boolean,
+    onShareAsExitChanged: (Boolean) -> Unit,
     routingMode: String, onRoutingModeChanged: (String) -> Unit,
     isDark: Boolean, themeMode: Int, onThemeModeChanged: (Int) -> Unit,
     selectedExitLabel: String,
@@ -664,6 +754,50 @@ fun HomeScreen(
             }
         }
 
+        // Run as exit node — Tailscale-style (one switch on home)
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (shareAsExit) Color(0xFF1E1B4B) else cardDark
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Share,
+                    contentDescription = null,
+                    tint = if (shareAsExit) Color(0xFFA78BFA) else textSecondary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Run as exit node",
+                        color = textPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    Text(
+                        when {
+                            shareAsExit && isConnected -> "Active — other devices can use this phone's internet"
+                            shareAsExit -> "Connecting… keep the app open"
+                            else -> "Let other devices route traffic through this phone"
+                        },
+                        color = textSecondary,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                Switch(
+                    checked = shareAsExit,
+                    onCheckedChange = onShareAsExitChanged
+                )
+            }
+        }
+
         // Stats Row
         val mbDown = String.format("%.2f MB", downloadBytes / (1024.0 * 1024.0))
         val mbUp = String.format("%.2f MB", uploadBytes / (1024.0 * 1024.0))
@@ -680,7 +814,8 @@ fun HomeScreen(
             }
         }
 
-        // Connection Mode
+        // Connection Mode (use another device as exit — optional)
+        if (!shareAsExit) {
         Text("CONNECTION MODE", color = Color(0xFF6B7280), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 8.dp))
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (routingMode == "mesh") Color(0xFF1E1B4B) else cardDark).clickable(enabled = !isConnected) { onRoutingModeChanged("mesh") }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
@@ -711,6 +846,7 @@ fun HomeScreen(
                 )
             }
         }
+        }
     }
 }
 
@@ -718,51 +854,42 @@ fun HomeScreen(
 fun ServersScreen(
     exitOptions: List<ExitNodeOption>, selectedExitId: String, isConnected: Boolean,
     shareExitMode: String, onShareExitModeChanged: (String) -> Unit,
-    shareAsExit: Boolean, onShareAsExitChanged: (Boolean) -> Unit,
     onExitSelected: (String, String) -> Unit,
     cardDark: Color, textPrimary: Color, textSecondary: Color
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp).verticalScroll(rememberScrollState())) {
+        Text(
+            "Use exit node",
+            color = textPrimary,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        Text(
+            "Route your traffic through another device on your account.",
+            color = textSecondary,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
         CollapsibleSection("ROUTING OPTIONS", cardDark, defaultExpanded = true) {
             Column(modifier = Modifier.padding(16.dp)) {
-        // "None" Option (Mesh Mode)
-        val isNoneSelected = shareExitMode == "mesh" && !shareAsExit
+        val isNoneSelected = shareExitMode == "mesh"
         Row(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
                 .background(if (isNoneSelected) MaterialTheme.colorScheme.primaryContainer else cardDark)
-                .clickable(enabled = !isConnected) { onShareExitModeChanged("mesh"); onShareAsExitChanged(false) }
+                .clickable(enabled = !isConnected) { onShareExitModeChanged("mesh") }
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(Icons.Default.Close, contentDescription = null, tint = if (isNoneSelected) MaterialTheme.colorScheme.onPrimaryContainer else textSecondary, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(12.dp))
-            Text("None", color = if (isNoneSelected) MaterialTheme.colorScheme.onPrimaryContainer else textPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text("Mesh only", color = if (isNoneSelected) MaterialTheme.colorScheme.onPrimaryContainer else textPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
             if (isNoneSelected) {
                 Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.primary).padding(horizontal = 8.dp, vertical = 4.dp)) {
                     Text("Sel", color = MaterialTheme.colorScheme.onPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // "Run as exit node" Option
-        Row(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                .background(if (shareAsExit) MaterialTheme.colorScheme.primaryContainer else cardDark)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Person, contentDescription = null, tint = if (shareAsExit) MaterialTheme.colorScheme.onPrimaryContainer else textSecondary, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Run as exit node", color = if (shareAsExit) MaterialTheme.colorScheme.onPrimaryContainer else textPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Text("Allow others to use this device", color = if (shareAsExit) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha=0.7f) else textSecondary, fontSize = 12.sp)
-            }
-            Switch(checked = shareAsExit, onCheckedChange = { 
-                onShareAsExitChanged(it)
-                if (it) onShareExitModeChanged("mesh") // Reset to mesh routing if acting as exit node
-            }, enabled = !isConnected)
         }
             }
         }
@@ -771,7 +898,7 @@ fun ServersScreen(
             Column(modifier = Modifier.padding(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             exitOptions.forEach { node ->
-                val isSelected = shareExitMode == "exit_node" && selectedExitId == node.id && !shareAsExit
+                val isSelected = shareExitMode == "exit_node" && selectedExitId == node.id
                 val flag = when(node.country.uppercase()) {
                     "IN" -> "IN"
                     "AE" -> "AE"
@@ -785,7 +912,6 @@ fun ServersScreen(
                         .clickable(enabled = !isConnected) { 
                             onExitSelected(node.id, node.label)
                             onShareExitModeChanged("exit_node")
-                            onShareAsExitChanged(false)
                         }
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -906,8 +1032,6 @@ fun StatsScreen(
 fun ProfileScreen(
     userName: String, userEmail: String, deviceName: String,
     userInitial: String, themeMode: Int, onThemeModeChanged: (Int) -> Unit,
-    shareAsExit: Boolean, onShareAsExitChanged: (Boolean) -> Unit,
-    shareCountry: String, onShareCountryChanged: (String) -> Unit,
     dnsServer: String, onDnsServerChanged: (String) -> Unit,
     wakeRemoteEnabled: Boolean, onWakeRemoteChanged: (Boolean) -> Unit,
     deviceMyPhone: String, onDeviceMyPhoneChanged: (String) -> Unit,
@@ -972,21 +1096,6 @@ fun ProfileScreen(
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = textPrimary, unfocusedTextColor = textPrimary)
                     )
-                }
-            }
-        }
-        
-        CollapsibleSection("NETWORK SETTINGS", cardDark, defaultExpanded = false) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Share as exit node", color = textPrimary, fontWeight = FontWeight.SemiBold)
-                Text("Others can use this phone's IP", fontSize = 12.sp, color = textSecondary)
-                Switch(checked = shareAsExit, onCheckedChange = onShareAsExitChanged, enabled = !isConnected)
-                if (shareAsExit) {
-                    Row {
-                        FilterChip(selected = shareCountry == "IN", onClick = { onShareCountryChanged("IN") }, label = { Text("IN") }, enabled = !isConnected)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        FilterChip(selected = shareCountry == "AE", onClick = { onShareCountryChanged("AE") }, label = { Text("AE") }, enabled = !isConnected)
-                    }
                 }
             }
         }

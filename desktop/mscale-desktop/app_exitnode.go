@@ -159,32 +159,65 @@ func (a *App) WakeDevice(targetDeviceID string) string {
 }
 
 func (a *App) EnableAsExitNode(countryCode, label string) string {
-	me, err := a.fetchMe()
-	if err != nil {
-		return "Error: login required — " + err.Error()
-	}
-	if strings.TrimSpace(me.DisplayName) != "" {
-		a.loggedInUser = me.DisplayName + " (" + me.Email + ")"
-	}
+	return a.SetShareAsExit(true, countryCode)
+}
 
-	if a.assignedIP == "" {
-		if msg := a.ConnectTunnel("mesh", "", "mscale"); strings.HasPrefix(msg, "Error") {
-			return msg
+func (a *App) GetShareAsExit() bool {
+	return a.sharingExit
+}
+
+// SetShareAsExit toggles Tailscale-style "run as exit node" on this PC.
+func (a *App) SetShareAsExit(enabled bool, countryCode string) string {
+	if enabled {
+		if a.sharingExit && a.assignedIP != "" {
+			return "Success: This device is already an exit node. Keep the app connected."
 		}
+		if a.overlayNet == "exit-via" || a.exitGatewayIP != "" {
+			a.teardownTunnel()
+		}
+		return a.ConnectTunnel("exit-node", "", "mscale")
 	}
 
-	if a.deviceID == "" {
-		return "Error: connect to mesh first before offering exit node"
+	if a.sharingExit && a.deviceID != "" {
+		_ = a.disableExitNodeOnServer(a.deviceID)
 	}
+	a.sharingExit = false
+	if a.assignedIP != "" {
+		return a.DisconnectTunnel()
+	}
+	return "Success: Exit node disabled"
+}
 
+func (a *App) disableExitNodeOnServer(deviceID string) error {
+	payload := map[string]string{"device_id": deviceID}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequest("POST", apiURL("/api/devices/exit-node/disable"), bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf(parseAPIError(resp))
+	}
+	return nil
+}
+
+func (a *App) enableExitNodeOnServer(deviceID, countryCode, label string) error {
 	countryCode = strings.ToUpper(strings.TrimSpace(countryCode))
 	label = strings.TrimSpace(label)
+	if countryCode == "" {
+		countryCode = "US"
+	}
 	if label == "" {
 		label = a.deviceName + " exit"
 	}
-
 	payload := map[string]interface{}{
-		"device_id":    a.deviceID,
+		"device_id":    deviceID,
 		"label":        label,
 		"country_code": countryCode,
 		"is_private":   false,
@@ -192,20 +225,98 @@ func (a *App) EnableAsExitNode(countryCode, label string) string {
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequest("POST", apiURL("/api/devices/exit-node/enable"), bytes.NewBuffer(body))
 	if err != nil {
-		return "Error: could not build request"
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return "Error: could not reach server — " + err.Error()
+		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "Error: " + parseAPIError(resp)
+		return fmt.Errorf(parseAPIError(resp))
+	}
+	return nil
+}
+
+func (a *App) VerifyExitRouteJSON() string {
+	if a.deviceID == "" {
+		b, _ := json.Marshal(map[string]string{"error": "Connect to Mscale first, then run the test."})
+		return string(b)
 	}
 
-	a.enableWindowsForwarding()
-	return fmt.Sprintf("Success: This device is now an exit node (%s). Keep the app connected.", countryCode)
+	statusURL := apiURL("/api/exit-route/status?device_id=" + a.deviceID)
+	req, err := http.NewRequest(http.MethodGet, statusURL, nil)
+	if err != nil {
+		b, _ := json.Marshal(map[string]string{"error": err.Error()})
+		return string(b)
+	}
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		b, _ := json.Marshal(map[string]string{"error": "Could not reach server — " + err.Error()})
+		return string(b)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := json.Marshal(map[string]string{"error": parseAPIError(resp)})
+		return string(b)
+	}
+
+	var status map[string]interface{}
+	if err := json.Unmarshal(body, &status); err != nil {
+		b, _ := json.Marshal(map[string]string{"error": "invalid status response"})
+		return string(b)
+	}
+
+	connected, _ := status["connected"].(bool)
+	if !connected {
+		status["hint"] = "Switch to Exit Node mode and select an exit device, then connect again."
+		out, _ := json.Marshal(status)
+		return string(out)
+	}
+
+	testBody, _ := json.Marshal(map[string]string{"device_id": a.deviceID})
+	testReq, err := http.NewRequest(http.MethodPost, apiURL("/api/exit-route/test"), bytes.NewBuffer(testBody))
+	if err != nil {
+		status["test_error"] = err.Error()
+		out, _ := json.Marshal(status)
+		return string(out)
+	}
+	testReq.Header.Set("Content-Type", "application/json")
+	testResp, err := a.httpClient.Do(testReq)
+	if err != nil {
+		status["test_error"] = "Could not reach server — " + err.Error()
+		out, _ := json.Marshal(status)
+		return string(out)
+	}
+	testData, _ := io.ReadAll(testResp.Body)
+	testResp.Body.Close()
+	if testResp.StatusCode == http.StatusOK {
+		var test map[string]interface{}
+		if json.Unmarshal(testData, &test) == nil {
+			for k, v := range test {
+				status[k] = v
+			}
+			status["test_sent"] = true
+		}
+	} else {
+		var testErr map[string]interface{}
+		if json.Unmarshal(testData, &testErr) == nil {
+			if msg, ok := testErr["error"].(string); ok && msg != "" {
+				status["test_error"] = msg
+			}
+			if msg, ok := testErr["message"].(string); ok && msg != "" {
+				status["test_error"] = msg
+			}
+		}
+		if _, ok := status["test_error"]; !ok {
+			status["test_error"] = parseAPIError(testResp)
+		}
+	}
+
+	out, _ := json.Marshal(status)
+	return string(out)
 }
 
 func (a *App) enableWindowsForwarding() {
@@ -370,8 +481,13 @@ func (a *App) ConnectTunnel(mode string, exitNodeID string, dnsSetting string) s
 		exitLabel = label
 		overlayNet = exitInternetWG
 		a.overlayNet = "exit-via"
+		a.sharingExit = false
+	} else if mode == "exit-node" {
+		a.overlayNet = overlayNet
+		a.sharingExit = false // set true after server enable succeeds
 	} else {
 		a.overlayNet = overlayNet
+		a.sharingExit = false
 	}
 
 	serverKey, err := wgtypes.ParseKey(strings.TrimSpace(enroll.ServerKey))
@@ -454,6 +570,18 @@ func (a *App) ConnectTunnel(mode string, exitNodeID string, dnsSetting string) s
 			enroll.OverlayIP, exitLabel, a.exitGatewayIP, routeNote, a.loggedInUser,
 		)
 	}
+	if mode == "exit-node" {
+		if err := a.enableExitNodeOnServer(deviceID, "", ""); err != nil {
+			a.teardownTunnel()
+			return "Error: could not register as exit node — " + err.Error()
+		}
+		a.enableWindowsForwarding()
+		a.sharingExit = true
+		return fmt.Sprintf(
+			"Assigned IP: %s\nExit node active — others can route through this PC\n%s\nLogged in as: %s",
+			enroll.OverlayIP, routeNote, a.loggedInUser,
+		)
+	}
 	return fmt.Sprintf(
 		"Assigned IP: %s\nMode: %s\n%s\nLogged in as: %s",
 		enroll.OverlayIP, mode, routeNote, a.loggedInUser,
@@ -479,6 +607,7 @@ func (a *App) teardownTunnel() {
 	overlay := a.overlayNet
 	exitGW := a.exitGatewayIP
 	deviceID := a.deviceID
+	sharing := a.sharingExit
 
 	restoreWindowsInternetRoutes(adapter, overlay)
 
@@ -500,7 +629,15 @@ func (a *App) teardownTunnel() {
 	a.adapterName = ""
 	a.overlayNet = ""
 	a.assignedIP = ""
+	a.sharingExit = false
 	a.deviceID = ""
+
+	if sharing && deviceID != "" {
+		id := deviceID
+		go func() {
+			_ = a.disableExitNodeOnServer(id)
+		}()
+	}
 
 	if exitGW != "" && deviceID != "" {
 		id := deviceID
@@ -537,6 +674,9 @@ func (a *App) GetStatus() string {
 			return "Logged in as: " + a.loggedInUser
 		}
 		return "Disconnected"
+	}
+	if a.sharingExit {
+		return fmt.Sprintf("Exit node active — IP: %s | %s", a.assignedIP, a.loggedInUser)
 	}
 	return fmt.Sprintf("Connected — IP: %s | %s", a.assignedIP, a.loggedInUser)
 }
