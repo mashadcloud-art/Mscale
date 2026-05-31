@@ -42,18 +42,6 @@
 </head>
 <body class="font-[DM_Sans,sans-serif] bg-gray-50 text-gray-900 antialiased min-h-full flex flex-col font-sans transition-colors duration-200 dark:bg-gray-950 dark:text-gray-100" id="body-root">
 
-    <div id="embedded-auth-gate" class="hidden fixed inset-0 z-[200] bg-gray-50 dark:bg-gray-950 items-center justify-center p-6">
-        <div class="max-w-md w-full text-center bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 shadow-xl">
-            <img src="assets/logo.png" alt="Mscale" width="48" height="48" class="rounded-xl mx-auto mb-4 shadow-sm">
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Sign in required</h2>
-            <p id="embedded-auth-message" class="text-sm text-gray-500 dark:text-gray-400 mb-6">Admin could not reach the Mscale server.</p>
-            <div class="flex flex-col gap-3">
-                <button type="button" onclick="requestAppSignIn()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-4 py-3 text-sm">Open app sign-in</button>
-                <button type="button" onclick="openAdminViaBrowser()" class="w-full border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold rounded-xl px-4 py-3 text-sm">Open admin in browser</button>
-            </div>
-        </div>
-    </div>
-
         <div id="app" class="flex h-screen overflow-hidden bg-white dark:bg-gray-900 w-full">
         
         <!-- Sidebar -->
@@ -122,7 +110,7 @@
                     <div class="flex items-center gap-3 min-w-0">
                         <div class="w-9 h-9 shrink-0 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs" id="profile-initials">MH</div>
                         <div class="overflow-hidden">
-                            <div class="text-sm font-semibold text-gray-900 dark:text-white truncate" id="profile-email-dd-main">Loading&hellip;</div>
+                            <div class="text-sm font-semibold text-gray-900 dark:text-white truncate" id="profile-email-dd-main">mashadcloud@gmail.com</div>
                             <div class="text-[11px] text-gray-500 dark:text-gray-400">Admin Console</div>
                         </div>
                     </div>
@@ -130,7 +118,7 @@
                 <div id="profileDropdown" class="hidden absolute bottom-[72px] left-4 w-[calc(100%-2rem)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700/60 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)] overflow-hidden z-50">
                     <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700/60">
                         <p class="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Signed in as</p>
-                        <p class="text-sm font-semibold truncate text-gray-900 dark:text-white" id="profile-email-dd">&mdash;</p>
+                        <p class="text-sm font-semibold truncate text-gray-900 dark:text-white" id="profile-email-dd">mashadcloud@gmail.com</p>
                     </div>
                     <div class="p-1">
                         <button onclick="toggleDarkMode()" class="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition">
@@ -837,63 +825,8 @@
             });
         }
 
-        let desktopBridgeReady = false;
-
         function hasDesktopBridge() {
-            if (isEmbeddedAdmin()) return desktopBridgeReady;
-            return !!(window.go && window.go.main && window.go.main.App);
-        }
-
-        async function verifyDesktopBridge() {
-            if (!isEmbeddedAdmin()) {
-                desktopBridgeReady = false;
-                return true;
-            }
-            initDesktopRpcListener();
-            try {
-                const json = await desktopRpc('GetSessionUserJSON');
-                desktopBridgeReady = !!json;
-                return desktopBridgeReady;
-            } catch (e) {
-                console.error('Desktop bridge verify failed', e);
-                desktopBridgeReady = false;
-                return false;
-            }
-        }
-
-        function showEmbeddedAuthGate(message) {
-            const gate = document.getElementById('embedded-auth-gate');
-            const app = document.getElementById('app');
-            const msg = document.getElementById('embedded-auth-message');
-            if (msg && message) msg.textContent = message;
-            if (gate) gate.classList.remove('hidden');
-            if (gate) gate.classList.add('flex');
-            if (app) app.classList.add('hidden');
-        }
-
-        function requestAppSignIn() {
-            window.parent.postMessage({ type: 'mscale-admin-request-signin' }, '*');
-        }
-
-        function openAdminViaBrowser() {
-            window.parent.postMessage({ type: 'mscale-admin-open-browser' }, '*');
-        }
-
-        async function ensureWebSession() {
-            if (isEmbeddedAdmin() || isDesktopApp()) return true;
-            try {
-                const res = await fetch(apiPathPrefix() + '/api/me', { credentials: 'include', cache: 'no-store' });
-                if (res.status === 401) {
-                    const redirect = encodeURIComponent(window.location.pathname + window.location.search);
-                    window.location.replace(apiPathPrefix() + '/login.html?redirect=' + redirect);
-                    return false;
-                }
-                return res.ok;
-            } catch (e) {
-                console.error('Web session check failed', e);
-                setConnectionStatus('Cannot reach server', true);
-                return false;
-            }
+            return isEmbeddedAdmin() || !!(window.go && window.go.main && window.go.main.App);
         }
 
         function desktopRpc(method, ...args) {
@@ -1068,10 +1001,6 @@
                 else await apiFetch('/api/auth/logout', { method: 'POST' });
             } catch (_) {}
             if (isDesktopApp() || sessionStorage.getItem('mscale_desktop') === '1') {
-                if (isEmbeddedAdmin()) {
-                    window.parent.postMessage({ type: 'mscale-admin-logout' }, '*');
-                    return;
-                }
                 window.location.replace('index.html?logout=1');
             } else {
                 window.location.replace(apiPathPrefix() + '/login.html?logout=1');
@@ -1509,15 +1438,13 @@
             alertNotification(data.message || 'Updated'); await fetchDevices();
         }
 
-        // Removed static API calls
-
-        window.addEventListener('message', (event) => {
-            if (event.data && event.data.type === 'mscale-admin-refresh') {
-                fetchUserProfile();
-                fetchDevices();
-                loadAppReleases();
-            }
-        });
+        // Initialize: REST poll + WebSocket for instant connect/disconnect
+        window.onload = async () => {
+            initDesktopRpcListener();
+            initTheme();
+            showDesktopBackButton();
+            applyAssetPaths();
+        };
     </script>
 </body>
 
