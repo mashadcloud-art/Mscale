@@ -260,10 +260,11 @@ func (pt *ProxyTun) BatchSize() int {
 
 func dialProtected(network, address string, timeout time.Duration) (net.Conn, error) {
 	d := net.Dialer{Timeout: timeout}
-	if wgProtectFn != nil {
+	if socketProtect != nil {
+		protect := socketProtect
 		d.Control = func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
-				wgProtectFn(int(fd))
+				protect(int(fd))
 			})
 		}
 	}

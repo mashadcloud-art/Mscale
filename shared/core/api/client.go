@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	AppVersion    = "1.0.16"
+	AppVersion    = "1.0.17"
 	sessionCookie = "mscale_session"
 )
 

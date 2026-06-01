@@ -61,7 +61,8 @@ func (c *VpnController) SetSocketProtector(p SocketProtector) {
 		return
 	}
 	c.protectFD = p.Protect
-	wg.InstallWireGuardProtect(c.protectFD)
+	installWireGuardProtect(c.protectFD)
+	exit.SetSocketProtect(c.protectFD)
 }
 
 func (c *VpnController) PrepareMesh(token, deviceName, storageDir, exitNodeID string) string {
@@ -115,7 +116,8 @@ func (c *VpnController) prepareMesh(token, deviceName, storageDir, exitNodeID st
 
 	c.apiClient = api.NewClient(token, "", exitNodeID != "", c.protectFD)
 
-	pubHex := hex.EncodeToString(privateKey.PublicKey()[:])
+	pub := privateKey.PublicKey()
+	pubHex := hex.EncodeToString(pub[:])
 
 	deviceID, err := c.apiClient.RegisterDevice(deviceName, pubHex, tunnelMode, exitNodeID)
 	if err != nil {
@@ -223,7 +225,8 @@ func (c *VpnController) StartTunnel(fd int64) string {
 	}
 	tunDevice.events <- tun.EventUp
 
-	wg.InstallWireGuardProtect(c.protectFD)
+	installWireGuardProtect(c.protectFD)
+	exit.SetSocketProtect(c.protectFD)
 
 	tunForWG := tun.Device(tunDevice)
 	if c.exitShare && c.exitMode == "proxy" {
@@ -244,7 +247,8 @@ func (c *VpnController) StartTunnel(fd int64) string {
 	}
 
 	if c.exitNodeID != "" {
-		pubHex := hex.EncodeToString(c.wgEngine.PrivateKey.PublicKey()[:])
+		pub := c.wgEngine.PrivateKey.PublicKey()
+		pubHex := hex.EncodeToString(pub[:])
 		if err := c.apiClient.ActivateExitRoute(c.deviceID, c.exitNodeID); err != nil {
 			c.Disconnect()
 			c.lastError = "exit route activation failed: " + err.Error()

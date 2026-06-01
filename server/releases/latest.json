@@ -1,10 +1,10 @@
-{
-  "version": "0.4.43",
-  "download_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.43.exe",
-  "setup_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.43.exe",
-  "android_version": "1.0.16",
-  "android_apk_url": "https://mashad.shop/mscale/downloads/mscale-android-v1.0.16.apk",
-  "notes": "Android: fix VPN UI stuck on connected after disconnect; stable connect state. Exit routing fixes from 1.0.15.",
-  "required": false
-}
+{
+  "version": "0.4.43",
+  "download_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.43.exe",
+  "setup_url": "https://mashad.shop/mscale/downloads/MscaleSetup-v0.4.43.exe",
+  "android_version": "1.0.17",
+  "android_apk_url": "https://mashad.shop/mscale/downloads/mscale-android-v1.0.17.apk",
+  "notes": "Phase 1: exit route after WireGuard is up; WakePrefs exit fallback; multi-user hub exit routing.",
+  "required": false
+}
 
