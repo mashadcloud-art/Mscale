@@ -9,6 +9,8 @@ export function CheckForUpdateJSON():Promise<string>;
 
 export function ConnectTunnel(arg1:string,arg2:string,arg3:string):Promise<string>;
 
+export function CreateAccount(arg1:string,arg2:string,arg3:string):Promise<string>;
+
 export function DisconnectTunnel():Promise<string>;
 
 export function EnableAsExitNode(arg1:string,arg2:string):Promise<string>;

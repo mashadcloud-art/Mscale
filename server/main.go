@@ -297,7 +297,7 @@ func watchDeviceHeartbeats(sqlDB *sql.DB) {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		_, err := sqlDB.Exec(`
+		res, err := sqlDB.Exec(`
 			UPDATE devices
 			SET status = 'offline'
 			WHERE LOWER(status) != 'offline'
@@ -307,7 +307,9 @@ func watchDeviceHeartbeats(sqlDB *sql.DB) {
 			log.Println("ERROR: Heartbeat watcher:", err)
 			continue
 		}
-		api.NotifyDevicesChanged()
+		if rows, _ := res.RowsAffected(); rows > 0 {
+			api.NotifyDevicesChanged()
+		}
 	}
 }
 
@@ -330,6 +332,7 @@ func main() {
 	}
 	log.Printf("INFO: wg0 is up. Server public key: %s", serverKey)
 	api.RestoreHubExitRoutes(sqlDB)
+	go api.SyncUserIsolationFirewall(sqlDB)
 
 	port := os.Getenv("MSCALE_PORT")
 	if port == "" {
@@ -337,7 +340,10 @@ func main() {
 	}
 
 	authHandler := &api.AuthHandler{DB: sqlDB}
-	api.DevicesChanged = hub.BroadcastDevices
+	api.DevicesChanged = func() {
+		go api.SyncUserIsolationFirewall(sqlDB)
+		hub.BroadcastDevices()
+	}
 
 	hub.db = sqlDB
 	go hub.Run()

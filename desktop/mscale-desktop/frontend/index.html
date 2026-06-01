@@ -231,7 +231,7 @@
         </div>
 
         <!-- Left Panel: Content Forms (Login / VPN Dashboard) -->
-        <div class="left-panel-rounded w-[50%] py-4 px-8 flex flex-col min-h-0 relative z-10 bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-900 transition-colors duration-300">
+        <div class="left-panel-rounded w-[50%] h-full min-h-0 py-4 px-8 flex flex-col relative z-10 bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-900 transition-colors duration-300">
             
             <!-- Draggable Area Top Spacing -->
             <div class="h-6 shrink-0"></div>
@@ -272,8 +272,8 @@
                 </div>
 
                 <div>
-                    <h2 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Welcome to Mscale</h2>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Secure your mesh network with a single click</p>
+                    <h2 id="auth-heading" class="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Welcome to Mscale</h2>
+                    <p id="auth-subheading" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Secure your mesh network with a single click</p>
                 </div>
 
                 <!-- Saved accounts (multi-account) -->
@@ -299,18 +299,28 @@
                         <span id="login-error-text">Error: invalid credentials</span>
                     </div>
 
+                    <div id="register-name-field" class="hidden">
+                        <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Your name</label>
+                        <input type="text" id="register-name" autocomplete="name" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white placeholder-gray-400 transition" placeholder="Jane Doe">
+                    </div>
+
                     <div>
                         <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Email address</label>
-                        <input type="email" id="email" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white placeholder-gray-400 transition" placeholder="you@example.com">
+                        <input type="email" id="email" autocomplete="email" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white placeholder-gray-400 transition" placeholder="you@example.com">
                     </div>
                     <div>
                         <div class="flex justify-between items-center mb-1.5">
                             <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Password</label>
                         </div>
-                        <input type="password" id="password" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white placeholder-gray-400 transition" placeholder="********">
+                        <input type="password" id="password" autocomplete="current-password" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white placeholder-gray-400 transition" placeholder="********">
+                    </div>
+
+                    <div id="register-confirm-field" class="hidden">
+                        <label class="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Confirm password</label>
+                        <input type="password" id="register-confirm" autocomplete="new-password" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white placeholder-gray-400 transition" placeholder="********">
                     </div>
                     
-                    <div class="flex items-center justify-between py-1 text-xs text-gray-500">
+                    <div id="signin-options-row" class="flex items-center justify-between py-1 text-xs text-gray-500">
                         <label class="flex items-center cursor-pointer select-none" style="--wails-draggable: no-drag; -webkit-app-region: no-drag;">
                             <input id="remember-me" type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500/20 border-gray-200 dark:border-gray-800 rounded bg-gray-50 dark:bg-gray-900 cursor-pointer">
                             <span class="ml-2">Remember email</span>
@@ -318,17 +328,22 @@
                         <a href="#" class="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">Forgot password?</a>
                     </div>
                     
-                    <button type="button" onclick="loginUser()" id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-4 py-3 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 mt-2">
-                        <span>Sign in</span>
+                    <button type="button" onclick="submitAuth()" id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-4 py-3 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 mt-2">
+                        <span id="auth-submit-label">Sign in</span>
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                     </button>
 
-                    <div class="relative py-2">
+                    <p class="text-center text-xs text-gray-500 dark:text-gray-400 pt-1">
+                        <span id="auth-toggle-hint">Don't have an account?</span>
+                        <button type="button" id="auth-mode-toggle" onclick="toggleAuthMode()" class="font-semibold text-blue-600 dark:text-blue-400 hover:underline ml-1" style="--wails-draggable: no-drag; -webkit-app-region: no-drag;">Create account</button>
+                    </p>
+
+                    <div id="oauth-divider" class="relative py-2">
                         <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-100 dark:border-gray-800"></div></div>
                         <div class="relative flex justify-center text-xs"><span class="px-2 bg-white dark:bg-gray-950 text-gray-400">Or continue with</span></div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3">
+                    <div id="oauth-buttons" class="grid grid-cols-2 gap-3">
                         <button type="button" onclick="loginWithGoogle()" class="w-full flex justify-center py-2.5 px-4 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
                             <svg class="h-4 w-4 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
@@ -347,7 +362,7 @@
                 <!-- Form Loading Indicator -->
                 <div id="login-loading-state" class="hidden flex-col items-center justify-center py-10 space-y-4">
                     <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                    <p class="text-xs font-semibold text-gray-500 dark:text-gray-400">Authenticating with portal...</p>
+                    <p id="login-loading-text" class="text-xs font-semibold text-gray-500 dark:text-gray-400">Authenticating with portal...</p>
                     <button type="button" onclick="cancelLogin()" class="mt-4 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">Cancel / Go Back</button>
                 </div>
                 
@@ -359,8 +374,9 @@
             </div>
 
             <!-- VPN CONNECTED VIEW SECTION (Hidden Automatically) -->
-            <div id="vpn-section" class="hidden flex-grow flex flex-col justify-between fade-in-ui relative">
-                
+            <div id="vpn-section" class="hidden login-scroll-shell flex flex-col min-h-0 fade-in-ui">
+                <div id="vpn-scroll" class="scroll-overlay flex-1 min-h-0 pb-2 pr-0.5 fade-in-ui" style="--wails-draggable: no-drag; -webkit-app-region: no-drag;">
+
                 <!-- Account actions -->
                 <div class="flex justify-between items-center mb-2 relative z-40" style="--wails-draggable: no-drag; -webkit-app-region: no-drag;">
                     <button type="button" data-vpn-action onclick="logoutUser()" class="flex items-center gap-1.5 text-gray-400 hover:text-red-500 transition text-[10px] font-bold px-3 py-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 uppercase tracking-widest">
@@ -383,6 +399,17 @@
                     </div>
                 </div>
 
+                <!-- Public Location Badge -->
+                <div class="flex justify-center mb-6">
+                    <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 shadow-sm transition">
+                        <span class="text-sm">📍</span>
+                        <div class="flex flex-col text-left">
+                            <span class="text-[9px] text-indigo-400 dark:text-indigo-500 font-bold uppercase tracking-widest leading-none">Your Location</span>
+                            <span id="public-location-text" class="text-xs font-bold text-indigo-700 dark:text-indigo-300 leading-tight">Fetching...</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Connect Button Container (Fixed dimensions for perfect circular rings) -->
                 <div class="relative w-32 h-32 mx-auto flex items-center justify-center mb-6">
                     <!-- Outer Dashed Ring -->
@@ -397,41 +424,31 @@
                     </button>
                 </div>
 
-                <!-- Run as exit node (Tailscale-style) -->
-                <div id="exit-share-card" class="w-full max-w-[280px] mx-auto mb-4">
-                    <div class="rounded-2xl p-3.5 border transition shadow-sm bg-gray-50 dark:bg-gray-900 border-gray-150 dark:border-gray-800" id="exit-share-card-inner">
-                        <div class="flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-3 min-w-0">
-                                <div class="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line></svg>
-                                </div>
-                                <div class="text-left min-w-0">
-                                    <p class="text-xs font-bold text-gray-900 dark:text-white">Run as exit node</p>
-                                    <p id="exit-share-hint" class="text-[10px] text-gray-500 dark:text-gray-400 leading-snug mt-0.5">Share this PC's internet with your other devices</p>
-                                </div>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                                <input type="checkbox" id="exit-share-toggle" class="sr-only peer" onchange="toggleShareAsExit(this.checked)">
-                                <div class="w-10 h-5 bg-gray-300 dark:bg-gray-700 rounded-full peer peer-checked:bg-indigo-600 transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition peer-checked:after:translate-x-5"></div>
-                            </label>
+                <!-- NEW: Entrance / Exit Buttons -->
+                <div class="w-full max-w-[280px] mx-auto mb-4 grid grid-cols-2 gap-3">
+                    <!-- Entrance Button -->
+                    <button type="button" onclick="openModal('location-modal')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-800 border border-gray-150 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-500/50 transition shadow-sm group">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-2 group-hover:scale-110 transition-transform">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m19 15-7 7-7-7"/></svg>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Active Routing Mode Card (Locations Modal Link) -->
-                <div id="routing-mode-card" class="w-full max-w-[280px] mx-auto mb-4">
-                    <div onclick="openModal('location-modal')" class="bg-gray-50 dark:bg-gray-900 rounded-2xl p-3 border border-gray-150 dark:border-gray-800 flex items-center justify-between cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition shadow-sm group">
-                        <div class="flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center text-gray-600 dark:text-gray-300 transition-colors group-hover:text-blue-500 dark:group-hover:text-blue-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
-                            </div>
-                            <div class="text-left">
-                                <p class="text-[9px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-0.5">Routing Mode</p>
-                                <p id="active-location" class="text-xs font-bold text-gray-800 dark:text-white leading-tight">Mesh Network Only</p>
-                            </div>
+                        <span class="text-xs font-bold text-gray-900 dark:text-white mb-0.5">Entrance</span>
+                        <span class="text-[9px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider text-center">Connect To</span>
+                    </button>
+                    
+                    <!-- Exit Button -->
+                    <button type="button" id="exit-share-btn-new" onclick="toggleShareAsExit(!document.getElementById('exit-share-toggle').checked)" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-800 border border-gray-150 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-500/50 transition shadow-sm group relative overflow-hidden">
+                        <!-- Hidden checkbox to maintain logic compatibility -->
+                        <input type="checkbox" id="exit-share-toggle" class="hidden" onchange="window.updateExitShareUI ? updateExitShareUI() : null">
+                        
+                        <div id="exit-icon-bg" class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-2 group-hover:scale-110 transition-colors transition-transform">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m5 9 7-7 7 7"/></svg>
                         </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200 transition-colors"><path d="m9 18 6-6-6-6"/></svg>
-                    </div>
+                        <span class="text-xs font-bold text-gray-900 dark:text-white mb-0.5">Exit</span>
+                        <span id="exit-share-hint" class="text-[9px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider text-center z-10">Share Internet</span>
+                        
+                        <!-- Active Background for Exit -->
+                        <div id="exit-active-bg" class="absolute inset-0 bg-indigo-600 opacity-0 transition-opacity z-0 pointer-events-none"></div>
+                    </button>
                 </div>
 
                 <!-- Network Stats Panel (Fades in when connected) -->
@@ -461,14 +478,16 @@
                 </div>
 
                 <!-- Status Badge (Absolute position indicator) -->
-                <div class="flex justify-center mt-2">
+                <div class="flex justify-center mt-2 pb-2">
                     <span id="status-badge" class="px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-800 text-[10px] font-bold uppercase tracking-wider">
                         Ready
                     </span>
                 </div>
 
+                </div>
+
                 <!-- Bottom Navigation Bar -->
-                <div class="flex justify-center gap-6 border-t border-gray-100 dark:border-gray-900 pt-4 mt-auto">
+                <div class="flex justify-center gap-6 border-t border-gray-100 dark:border-gray-900 pt-3 pb-1 shrink-0">
                     <button onclick="openModal('settings-modal')" class="text-gray-400 hover:text-gray-700 dark:hover:text-white transition focus:outline-none" title="Settings">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                     </button>
@@ -525,8 +544,8 @@
         <div id="location-modal" class="absolute left-0 w-[50%] bottom-0 top-16 bg-white dark:bg-gray-900 rounded-t-[2rem] shadow-2xl z-50 hidden opacity-0 transform translate-y-full transition-all duration-300 flex flex-col overflow-hidden border-t border-gray-100 dark:border-gray-800">
             <div class="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 z-10 sticky top-0">
                 <div>
-                    <h3 class="font-bold text-lg text-gray-900 dark:text-white">Select Routing Mode</h3>
-                    <p class="text-xs text-gray-400 mt-0.5">Route your network endpoints seamlessly</p>
+                    <h3 class="font-bold text-lg text-gray-900 dark:text-white">Entrance Options</h3>
+                    <p class="text-xs text-gray-400 mt-0.5">Route your network through another device</p>
                 </div>
                 <button onclick="closeModal('location-modal')" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-white transition">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"></line><line x1="6" x2="18" y1="6" y2="18"></line></svg>
@@ -535,26 +554,29 @@
             
             <div class="overflow-y-auto flex-grow p-5 space-y-4">
                 
-                <!-- Routing Mode options -->
-                <div class="grid grid-cols-2 gap-3">
-                    <button onclick="selectRoutingMode('mesh', 'Mesh Network Only')" class="flex flex-col items-start p-4 rounded-2xl bg-blue-50/50 hover:bg-blue-50 dark:bg-gray-800/40 dark:hover:bg-gray-850/60 border border-blue-100/50 dark:border-gray-850/50 hover:border-blue-200 dark:hover:border-blue-900/30 transition text-left group">
-                        <span class="text-2xl mb-2">⚡</span>
-                        <span class="font-bold text-sm text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">Mesh Only</span>
-                        <span class="text-[10px] text-gray-400 mt-1">Direct device communication, no internet exit.</span>
-                    </button>
-                    <button onclick="selectRoutingMode('exit-via', 'Use Exit Node')" class="flex flex-col items-start p-4 rounded-2xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800/40 dark:hover:bg-gray-850/60 border border-gray-150 dark:border-gray-850/50 hover:border-blue-200 dark:hover:border-blue-900/30 transition text-left group">
-                        <span class="text-2xl mb-2">🌍</span>
-                        <span class="font-bold text-sm text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">Exit Node</span>
-                        <span class="text-[10px] text-gray-400 mt-1">Route internet traffic securely through another device.</span>
-                    </button>
-                </div>
-
-                <!-- Search exit nodes input (Only showing if exit-via is active/visible) -->
-                <div id="exit-nodes-container" class="space-y-3 pt-2">
-                    <div class="flex justify-between items-center px-1">
-                        <h4 class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Select Exit Node Device</h4>
-                        <span id="exit-node-hint" class="text-[10px] text-emerald-500 font-semibold"></span>
+                <!-- Search exit nodes input -->
+                <div id="exit-nodes-container" class="space-y-3">
+                    <div class="flex justify-between items-center px-1 gap-2">
+                        <h4 class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Select Entrance Device</h4>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span id="exit-node-hint" class="text-[10px] text-emerald-500 font-semibold"></span>
+                            <button type="button" id="exit-nodes-refresh-btn" onclick="refreshExitNodes()" title="Refresh devices" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition disabled:opacity-50">
+                                <svg id="exit-nodes-refresh-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+                                Refresh
+                            </button>
+                        </div>
                     </div>
+
+                    <!-- Disconnect Button -->
+                    <button onclick="selectRoutingMode('mesh', 'Mesh Network Only'); closeModal('location-modal');" class="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-150 dark:border-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-800/50 cursor-pointer transition text-left group mb-2">
+                        <div class="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center text-red-600 dark:text-red-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                        </div>
+                        <div>
+                            <p class="text-sm font-bold text-gray-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400">Disable Entrance</p>
+                            <p class="text-[10px] text-gray-400">Use my own internet connection</p>
+                        </div>
+                    </button>
 
                     <div class="relative">
                         <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>

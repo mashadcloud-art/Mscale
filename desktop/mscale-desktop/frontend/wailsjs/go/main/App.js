@@ -18,6 +18,10 @@ export function ConnectTunnel(arg1, arg2, arg3) {
   return window['go']['main']['App']['ConnectTunnel'](arg1, arg2, arg3);
 }
 
+export function CreateAccount(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CreateAccount'](arg1, arg2, arg3);
+}
+
 export function DisconnectTunnel() {
   return window['go']['main']['App']['DisconnectTunnel']();
 }

@@ -115,6 +115,7 @@ func Migrate(db *sql.DB) error {
 
 		`CREATE TABLE IF NOT EXISTS acls (
 			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
 			source_ip TEXT NOT NULL,
 			dest_ip TEXT NOT NULL,
 			port INTEGER NOT NULL DEFAULT 0,
@@ -138,6 +139,7 @@ func Migrate(db *sql.DB) error {
 		`ALTER TABLE devices ADD COLUMN exit_node_id TEXT`,
 		`ALTER TABLE devices ADD COLUMN tunnel_mode TEXT DEFAULT 'mesh'`,
 		`ALTER TABLE devices ADD COLUMN endpoint_ip TEXT`,
+		`ALTER TABLE acls ADD COLUMN user_id TEXT`,
 		
 		`CREATE TABLE IF NOT EXISTS settings (
 			key TEXT PRIMARY KEY,

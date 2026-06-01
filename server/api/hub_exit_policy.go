@@ -8,10 +8,13 @@ import (
 
 const exitPolicyTable = "100"
 
-// ensureClientExitPolicy sends this client's internet-bound forwarded traffic out wg0 (to exit peer).
-func ensureClientExitPolicy(clientOverlay string) error {
+// ensureClientExitPolicy routes this client's forwarded internet traffic to the mobile exit peer on wg0.
+func ensureClientExitPolicy(clientOverlay, exitOverlay string) error {
 	if clientOverlay == "" {
 		return fmt.Errorf("empty client overlay")
+	}
+	if exitOverlay == "" {
+		return fmt.Errorf("empty exit overlay")
 	}
 	clearClientExitPolicy(clientOverlay)
 
@@ -20,15 +23,20 @@ func ensureClientExitPolicy(clientOverlay string) error {
 		return fmt.Errorf("ip rule: %w", err)
 	}
 	for _, prefix := range []string{"0.0.0.0/1", "128.0.0.0/1"} {
-		if _, err := runSudo("ip", "route", "replace", prefix,
-			"dev", "wg0", "table", exitPolicyTable); err != nil {
-			return fmt.Errorf("ip route table %s: %w", exitPolicyTable, err)
+		_, err := runSudo("ip", "route", "replace", prefix,
+			"via", exitOverlay, "dev", "wg0", "table", exitPolicyTable)
+		if err != nil {
+			// Some kernels reject via on wg; fall back to dev-only (WireGuard picks exit peer by AllowedIPs).
+			if _, err2 := runSudo("ip", "route", "replace", prefix,
+				"dev", "wg0", "table", exitPolicyTable); err2 != nil {
+				return fmt.Errorf("ip route table %s: %w", exitPolicyTable, err)
+			}
 		}
 	}
-	return verifyHubExitRoute(clientOverlay)
+	return verifyHubExitRoute(clientOverlay, exitOverlay)
 }
 
-func verifyHubExitRoute(clientOverlay string) error {
+func verifyHubExitRoute(clientOverlay, exitOverlay string) error {
 	out, err := runSudo("ip", "route", "get", "8.8.8.8", "from", clientOverlay, "iif", "wg0")
 	if err != nil {
 		return fmt.Errorf("route verify: %w", err)
@@ -54,13 +62,41 @@ func clearClientExitPolicy(clientOverlay string) {
 	}
 }
 
-func ensureHubExitNAT() error {
-	check := exec.Command("sudo", "iptables", "-t", "nat", "-C", "POSTROUTING", "-s", "100.64.0.0/10", "!", "-d", "100.64.0.0/10", "-j", "MASQUERADE")
-	if check.Run() == nil {
-		return nil
+// clearHubOverlayNAT removes the broad mesh SNAT rule that sends traffic out Oracle's public IP
+// instead of forwarding to a phone exit node.
+func clearHubOverlayNAT() {
+	for i := 0; i < 8; i++ {
+		out, _ := exec.Command("sudo", "iptables", "-t", "nat", "-D", "POSTROUTING",
+			"-s", "100.64.0.0/10", "!", "-d", "100.64.0.0/10", "-j", "MASQUERADE").CombinedOutput()
+		msg := string(out)
+		if strings.Contains(msg, "Bad rule") || strings.Contains(msg, "does a matching rule exist") {
+			break
+		}
 	}
-	if _, err := runSudo("iptables", "-t", "nat", "-A", "POSTROUTING", "-s", "100.64.0.0/10", "!", "-d", "100.64.0.0/10", "-j", "MASQUERADE"); err != nil {
+}
+
+// ensureMobileExitPath prepares forwarding for phone/tablet exit nodes (no hub SNAT).
+func ensureMobileExitPath() error {
+	clearHubOverlayNAT()
+	return ensureHubExitForwarding()
+}
+
+// ensureHubSelfExitNAT SNAT only when the hub itself is the exit (not for mobile exit forwarding).
+func ensureHubSelfExitNAT() error {
+	clearHubOverlayNAT()
+	check := exec.Command("sudo", "iptables", "-t", "nat", "-C", "POSTROUTING",
+		"-s", "100.64.0.1/32", "!", "-d", "100.64.0.0/10", "-j", "MASQUERADE")
+	if check.Run() == nil {
+		return ensureHubExitForwarding()
+	}
+	if _, err := runSudo("iptables", "-t", "nat", "-A", "POSTROUTING",
+		"-s", "100.64.0.1/32", "!", "-d", "100.64.0.0/10", "-j", "MASQUERADE"); err != nil {
 		return err
 	}
-	return nil
+	return ensureHubExitForwarding()
+}
+
+// ensureHubExitNAT is deprecated for mobile exit; kept as alias for hub-self mode only.
+func ensureHubExitNAT() error {
+	return ensureHubSelfExitNAT()
 }

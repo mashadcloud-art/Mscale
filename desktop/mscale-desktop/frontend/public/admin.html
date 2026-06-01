@@ -13,12 +13,42 @@
 <body id="body-root">
 
     <div id="embedded-auth-gate" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--bg-base); align-items:center; justify-content:center; padding:2rem;">
-        <div style="max-width:420px; text-align:center; background:var(--bg-panel-solid); border:1px solid var(--border-solid); border-radius:16px; padding:2rem; box-shadow:var(--shadow-lg);">
-            <img src="assets/logo.png" alt="Mscale" width="48" height="48" style="border-radius:12px; margin:0 auto 1rem;">
-            <h2 style="font-size:1.25rem; font-weight:600; margin-bottom:0.5rem;">Sign in required</h2>
-            <p id="embedded-auth-message" class="text-sm text-muted" style="margin-bottom:1.5rem;">Admin could not reach the Mscale server. Sign in to the desktop app first, then reopen Admin Console.</p>
-            <div style="display:flex; flex-direction:column; gap:0.75rem;">
-                <button type="button" onclick="requestAppSignIn()" class="btn btn-primary" style="width:100%;">Open app sign-in</button>
+        <div style="max-width:400px; width:100%; background:var(--bg-panel-solid); border:1px solid var(--border-solid); border-radius:16px; padding:2rem; box-shadow:var(--shadow-lg);">
+            <div style="text-align:center; margin-bottom:1.25rem;">
+                <img src="assets/logo.png" alt="Mscale" width="48" height="48" style="border-radius:12px; margin:0 auto 0.75rem;">
+                <h2 id="admin-auth-heading" style="font-size:1.25rem; font-weight:600; margin-bottom:0.35rem;">Sign in to Admin</h2>
+                <p id="admin-auth-subheading" class="text-sm text-muted">Sign in to manage your devices and network.</p>
+            </div>
+
+            <div id="admin-auth-error" class="hidden text-sm" style="margin-bottom:1rem; padding:0.75rem 1rem; border-radius:12px; background:var(--danger-bg); color:var(--danger-text); border:1px solid rgba(239,68,68,0.25);"></div>
+
+            <div id="admin-auth-name-field" class="hidden" style="margin-bottom:0.75rem;">
+                <label class="text-xs text-muted" style="display:block; margin-bottom:0.35rem; font-weight:600;">Your name</label>
+                <input id="admin-auth-name" type="text" autocomplete="name" placeholder="Jane Doe" class="input-field" style="width:100%;">
+            </div>
+            <div style="margin-bottom:0.75rem;">
+                <label class="text-xs text-muted" style="display:block; margin-bottom:0.35rem; font-weight:600;">Email</label>
+                <input id="admin-auth-email" type="email" autocomplete="email" placeholder="you@example.com" class="input-field" style="width:100%;">
+            </div>
+            <div style="margin-bottom:0.75rem;">
+                <label class="text-xs text-muted" style="display:block; margin-bottom:0.35rem; font-weight:600;">Password</label>
+                <input id="admin-auth-password" type="password" autocomplete="current-password" placeholder="••••••••" class="input-field" style="width:100%;">
+            </div>
+            <div id="admin-auth-confirm-field" class="hidden" style="margin-bottom:0.75rem;">
+                <label class="text-xs text-muted" style="display:block; margin-bottom:0.35rem; font-weight:600;">Confirm password</label>
+                <input id="admin-auth-confirm" type="password" autocomplete="new-password" placeholder="••••••••" class="input-field" style="width:100%;">
+            </div>
+
+            <button type="button" onclick="submitAdminAuth()" id="admin-auth-submit" class="btn btn-primary" style="width:100%;">Sign in</button>
+
+            <p class="text-xs text-muted" style="margin-top:1rem; text-align:center;">
+                <span id="admin-auth-toggle-hint">Don't have an account?</span>
+                <button type="button" onclick="toggleAdminAuthMode()" id="admin-auth-mode-toggle" class="text-sm" style="font-weight:600; color:var(--primary); margin-left:0.25rem; background:none; border:none; cursor:pointer; text-decoration:underline;">Create account</button>
+            </p>
+
+            <div id="admin-auth-embedded-actions" style="margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid var(--border-solid); display:none; flex-direction:column; gap:0.5rem;">
+                <button type="button" onclick="requestAppSignIn()" class="btn btn-outline" style="width:100%;">Use app sign-in screen</button>
+                <button type="button" onclick="requestAppCreateAccount()" class="btn btn-outline" style="width:100%;">Use app create account</button>
                 <button type="button" onclick="openAdminViaBrowser()" class="btn btn-outline" style="width:100%;">Open admin in browser</button>
             </div>
         </div>
@@ -708,14 +738,125 @@
         function showEmbeddedAuthGate(message) {
             const gate = document.getElementById('embedded-auth-gate');
             const app = document.getElementById('app');
-            const msg = document.getElementById('embedded-auth-message');
-            if (msg && message) msg.textContent = message;
+            const sub = document.getElementById('admin-auth-subheading');
+            if (sub && message) sub.textContent = message;
             if (gate) gate.style.display = 'flex';
             if (app) app.style.display = 'none';
         }
 
+        function hideEmbeddedAuthGate() {
+            const gate = document.getElementById('embedded-auth-gate');
+            const app = document.getElementById('app');
+            if (gate) gate.style.display = 'none';
+            if (app) app.style.display = '';
+        }
+
+        let adminAuthMode = 'signin';
+
+        function setAdminAuthMode(mode) {
+            adminAuthMode = mode === 'create' ? 'create' : 'signin';
+            const isCreate = adminAuthMode === 'create';
+            document.getElementById('admin-auth-name-field')?.classList.toggle('hidden', !isCreate);
+            document.getElementById('admin-auth-confirm-field')?.classList.toggle('hidden', !isCreate);
+            document.getElementById('admin-auth-heading').textContent = isCreate ? 'Create account' : 'Sign in to Admin';
+            document.getElementById('admin-auth-subheading').textContent = isCreate
+                ? 'Register a new Mscale account to manage your network.'
+                : (isEmbeddedAdmin() ? 'Sign in to open the admin console in the app.' : 'Sign in to manage your devices and network.');
+            document.getElementById('admin-auth-submit').textContent = isCreate ? 'Create account' : 'Sign in';
+            document.getElementById('admin-auth-toggle-hint').textContent = isCreate ? 'Already have an account?' : "Don't have an account?";
+            document.getElementById('admin-auth-mode-toggle').textContent = isCreate ? 'Sign in' : 'Create account';
+            const pwd = document.getElementById('admin-auth-password');
+            if (pwd) pwd.autocomplete = isCreate ? 'new-password' : 'current-password';
+        }
+
+        function toggleAdminAuthMode() {
+            document.getElementById('admin-auth-error')?.classList.add('hidden');
+            setAdminAuthMode(adminAuthMode === 'create' ? 'signin' : 'create');
+        }
+
+        function showAdminAuthError(msg) {
+            const el = document.getElementById('admin-auth-error');
+            if (!el) return;
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        async function submitAdminAuth() {
+            const name = document.getElementById('admin-auth-name')?.value?.trim() || '';
+            const email = document.getElementById('admin-auth-email')?.value?.trim() || '';
+            const password = document.getElementById('admin-auth-password')?.value || '';
+            const confirm = document.getElementById('admin-auth-confirm')?.value || '';
+            document.getElementById('admin-auth-error')?.classList.add('hidden');
+
+            if (adminAuthMode === 'create') {
+                if (!name || !email || !password) { showAdminAuthError('Enter your name, email, and password.'); return; }
+                if (password.length < 6) { showAdminAuthError('Password must be at least 6 characters.'); return; }
+                if (password !== confirm) { showAdminAuthError('Passwords do not match.'); return; }
+            } else if (!email || !password) {
+                showAdminAuthError('Enter email and password.');
+                return;
+            }
+
+            const btn = document.getElementById('admin-auth-submit');
+            btn.disabled = true;
+            btn.textContent = adminAuthMode === 'create' ? 'Creating…' : 'Signing in…';
+
+            try {
+                if (isEmbeddedAdmin()) {
+                    const result = adminAuthMode === 'create'
+                        ? await desktopRpc('CreateAccount', name, email, password)
+                        : await desktopRpc('Login', email, password);
+                    if (!result || !String(result).startsWith('Success')) {
+                        showAdminAuthError(String(result || 'Authentication failed').replace(/^Error:\s*/, ''));
+                        return;
+                    }
+                    await desktopRpc('PrepareAdminSession').catch(() => {});
+                    desktopBridgeReady = true;
+                } else {
+                    if (adminAuthMode === 'create') {
+                        const res = await fetch(apiPathPrefix() + '/api/auth/register', {
+                            method: 'POST', credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name, email, password })
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) { showAdminAuthError(data.error || 'Could not create account.'); return; }
+                        const loginRes = await fetch(apiPathPrefix() + '/api/auth/login', {
+                            method: 'POST', credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, password })
+                        });
+                        if (!loginRes.ok) {
+                            showAdminAuthError('Account created. Sign in with your new credentials.');
+                            setAdminAuthMode('signin');
+                            return;
+                        }
+                    } else {
+                        const res = await fetch(apiPathPrefix() + '/api/auth/login', {
+                            method: 'POST', credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, password })
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) { showAdminAuthError(data.error || 'Sign in failed.'); return; }
+                    }
+                }
+                hideEmbeddedAuthGate();
+                await bootstrapAdminConsole();
+            } catch (e) {
+                showAdminAuthError(e.message || 'Authentication failed.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = adminAuthMode === 'create' ? 'Create account' : 'Sign in';
+            }
+        }
+
         function requestAppSignIn() {
             window.parent.postMessage({ type: 'mscale-admin-request-signin' }, '*');
+        }
+
+        function requestAppCreateAccount() {
+            window.parent.postMessage({ type: 'mscale-admin-request-create-account' }, '*');
         }
 
         function openAdminViaBrowser() {
@@ -726,17 +867,24 @@
             if (isEmbeddedAdmin() || isDesktopApp()) return true;
             try {
                 const res = await fetch(apiPathPrefix() + '/api/me', { credentials: 'include', cache: 'no-store' });
-                if (res.status === 401) {
-                    const redirect = encodeURIComponent(window.location.pathname + window.location.search);
-                    window.location.replace(apiPathPrefix() + '/login.html?redirect=' + redirect);
-                    return false;
-                }
+                if (res.status === 401) return false;
                 return res.ok;
             } catch (e) {
                 console.error('Web session check failed', e);
                 setConnectionStatus('Cannot reach server', true);
                 return false;
             }
+        }
+
+        async function bootstrapAdminConsole() {
+            initTheme();
+            showDesktopBackButton();
+            applyAssetPaths();
+            await loadAppReleases();
+            await fetchUserProfile();
+            await fetchDevices();
+            initWebSocket();
+            setInterval(fetchDevices, 8000);
         }
 
         function desktopRpc(method, ...args) {
@@ -788,10 +936,20 @@
             const p = apiPathPrefix();
             return p ? p + '/assets/' + name : 'assets/' + name;
         }
+        function isDarkTheme() {
+            return document.documentElement.classList.contains('dark') || document.documentElement.getAttribute('data-theme') === 'dark';
+        }
+
+        function applyBannerTheme(isDark) {
+            const img = document.getElementById('banner-bg');
+            if (!img) return;
+            img.src = assetPath(isDark ? 'blackbanner.png' : 'cheetahbanner.png');
+        }
+
         function applyAssetPaths() {
             const logo = assetPath('logo.png');
             document.getElementById('brand-logo')?.setAttribute('src', logo);
-            document.getElementById('banner-bg')?.setAttribute('src', assetPath('cheetahbanner.png'));
+            applyBannerTheme(isDarkTheme());
             const favicon = document.querySelector('link[rel="icon"]');
             if (favicon) favicon.href = assetPath('icon.png');
         }
@@ -1065,6 +1223,7 @@
             if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
             else document.documentElement.removeAttribute('data-theme');
             syncThemeIcons(isDark);
+            applyBannerTheme(isDark);
         }
 
         // Dark Mode Logic
@@ -1074,6 +1233,7 @@
             else document.documentElement.removeAttribute('data-theme');
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
             syncThemeIcons(isDark);
+            applyBannerTheme(isDark);
         }
         // Active Navigation Router Sim
         function switchTab(tabName) {
@@ -1360,24 +1520,26 @@
             initDesktopRpcListener();
 
             if (isEmbeddedAdmin()) {
-                const bridgeOk = await verifyDesktopBridge();
-                if (!bridgeOk) {
-                    showEmbeddedAuthGate('Could not connect admin to the Mscale server. Sign in to the desktop app, then try again.');
+                desktopBridgeReady = await verifyDesktopBridge();
+                if (!desktopBridgeReady) {
+                    setAdminAuthMode('signin');
+                    const embeddedActions = document.getElementById('admin-auth-embedded-actions');
+                    if (embeddedActions) embeddedActions.style.display = 'flex';
+                    showEmbeddedAuthGate('Sign in or create an account to use the admin console.');
                     return;
                 }
             } else {
                 const ok = await ensureWebSession();
-                if (!ok) return;
+                if (!ok) {
+                    setAdminAuthMode('signin');
+                    const embeddedActions = document.getElementById('admin-auth-embedded-actions');
+                    if (embeddedActions) embeddedActions.style.display = 'none';
+                    showEmbeddedAuthGate('');
+                    return;
+                }
             }
 
-            initTheme();
-            showDesktopBackButton();
-            applyAssetPaths();
-            await loadAppReleases();
-            await fetchUserProfile();
-            await fetchDevices();
-            initWebSocket();
-            setInterval(fetchDevices, 8000);
+            await bootstrapAdminConsole();
         };
 
         window.addEventListener('message', (event) => {

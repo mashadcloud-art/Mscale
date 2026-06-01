@@ -40,4 +40,22 @@ object PhoneUtils {
         }
         return b.toString()
     }
+
+    /** Prefer active mobile network / SIM country over device locale (locale may stay IN in UAE). */
+    fun readCountryCode(context: Context): String {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            try {
+                val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+                val network = tm.networkCountryIso?.trim()?.uppercase().orEmpty()
+                if (network.length == 2 && network != "ZZ") return network
+                val sim = tm.simCountryIso?.trim()?.uppercase().orEmpty()
+                if (sim.length == 2 && sim != "ZZ") return sim
+            } catch (_: Exception) {
+            }
+        }
+        val locale = context.resources.configuration.locales[0].country.uppercase()
+        return if (locale.length == 2) locale else "AE"
+    }
 }

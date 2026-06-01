@@ -10,127 +10,17 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
-	"golang.zx2c4.com/wireguard/conn"
-	"golang.zx2c4.com/wireguard/device"
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	"mscale.core/api"
+	"mscale.core/wg"
 )
 
-func (a *App) ensureDeviceRecord(mode string, publicKey string) (string, error) {
-	payload := deviceRegisterRequest{
-		DeviceName: a.deviceName,
-		Platform:   "windows",
-		DeviceType: "desktop",
-		PublicKey:  publicKey,
-		AppVersion: GetAppVersion(),
-		OSVersion:  "windows",
-		CurrentDNS: getSystemDNS(),
-		TunnelMode: mode,
-		EndpointIP: serverIP,
-	}
-	body, _ := json.Marshal(payload)
-
-	req, err := http.NewRequest("POST", apiURL("/api/devices/register"), bytes.NewBuffer(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		body, _ := io.ReadAll(resp.Body)
-		var out deviceRegisterResponse
-		if err := json.Unmarshal(body, &out); err != nil {
-			return "", fmt.Errorf("invalid register response: %w", err)
-		}
-		if out.ID == "" {
-			return "", fmt.Errorf("register response missing device id")
-		}
-		saveDeviceID(a.deviceName, out.ID)
-		return out.ID, nil
-	}
-
-	return "", fmt.Errorf(parseAPIError(resp))
-}
-
-func (a *App) updateDevicePublicKey(deviceID string, publicKey string) error {
-	payload := updateKeyRequest{
-		DeviceID:  deviceID,
-		PublicKey: publicKey,
-	}
-	body, _ := json.Marshal(payload)
-
-	req, err := http.NewRequest("POST", apiURL("/api/devices/update-key"), bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(parseAPIError(resp))
-	}
-
-	return nil
-}
-
-func (a *App) enrollDevice(deviceID string) (*enrollResponse, error) {
-	payload := enrollRequest{
-		DeviceID: deviceID,
-	}
-	body, _ := json.Marshal(payload)
-
-	req, err := http.NewRequest("POST", apiURL("/api/devices/enroll"), bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(parseAPIError(resp))
-	}
-
-	var out enrollResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("invalid enroll response")
-	}
-	return &out, nil
+func (a *App) getAPIClient() *api.Client {
+	return api.NewClient(a.getSessionToken(), fmt.Sprintf("http://%s:%s", serverIP, serverPort), false, nil)
 }
 
 func (a *App) ListExitNodesJSON() string {
-	req, err := http.NewRequest("GET", apiURL("/api/exit-nodes"), nil)
-	if err != nil {
-		return "[]"
-	}
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return "[]"
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		msg := parseAPIError(resp)
-		b, _ := json.Marshal([]map[string]string{{"_error": msg}})
-		return string(b)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	return string(body)
+	return a.getAPIClient().FetchExitNodes()
 }
 
 func (a *App) WakeDevice(targetDeviceID string) string {
@@ -179,64 +69,13 @@ func (a *App) SetShareAsExit(enabled bool, countryCode string) string {
 	}
 
 	if a.sharingExit && a.deviceID != "" {
-		_ = a.disableExitNodeOnServer(a.deviceID)
+		_ = a.getAPIClient().DisableExitNode(a.deviceID)
 	}
 	a.sharingExit = false
 	if a.assignedIP != "" {
 		return a.DisconnectTunnel()
 	}
 	return "Success: Exit node disabled"
-}
-
-func (a *App) disableExitNodeOnServer(deviceID string) error {
-	payload := map[string]string{"device_id": deviceID}
-	body, _ := json.Marshal(payload)
-	req, err := http.NewRequest("POST", apiURL("/api/devices/exit-node/disable"), bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(parseAPIError(resp))
-	}
-	return nil
-}
-
-func (a *App) enableExitNodeOnServer(deviceID, countryCode, label string) error {
-	countryCode = strings.ToUpper(strings.TrimSpace(countryCode))
-	label = strings.TrimSpace(label)
-	if countryCode == "" {
-		countryCode = "US"
-	}
-	if label == "" {
-		label = a.deviceName + " exit"
-	}
-	payload := map[string]interface{}{
-		"device_id":    deviceID,
-		"label":        label,
-		"country_code": countryCode,
-		"is_private":   false,
-	}
-	body, _ := json.Marshal(payload)
-	req, err := http.NewRequest("POST", apiURL("/api/devices/exit-node/enable"), bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(parseAPIError(resp))
-	}
-	return nil
 }
 
 func (a *App) VerifyExitRouteJSON() string {
@@ -323,79 +162,20 @@ func (a *App) enableWindowsForwarding() {
 	if a.adapterName == "" {
 		return
 	}
-	
-	// 1. Enable IP forwarding on the WireGuard adapter
+
+	hiddenCommand("powershell", "-NoProfile", "-Command",
+		"Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters' -Name 'IPEnableRouter' -Value 1 -ErrorAction SilentlyContinue").Run()
+	hiddenCommand("powershell", "-NoProfile", "-Command",
+		"Set-Service -Name RemoteAccess -StartupType Manual -ErrorAction SilentlyContinue; Start-Service -Name RemoteAccess -ErrorAction SilentlyContinue").Run()
+
 	hiddenCommand("powershell", "-NoProfile", "-Command",
 		"Set-NetIPInterface -InterfaceAlias '"+a.adapterName+"' -Forwarding Enabled -ErrorAction SilentlyContinue").Run()
 	
-	// 2. Enable IP forwarding on all active physical adapters (Wi-Fi, Ethernet) so traffic can leave the machine
 	hiddenCommand("powershell", "-NoProfile", "-Command",
 		"Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.Name -ne '"+a.adapterName+"' } | ForEach-Object { Set-NetIPInterface -InterfaceAlias $_.Name -Forwarding Enabled -AddressFamily IPv4 -ErrorAction SilentlyContinue }").Run()
 	
-	// 3. Create NAT to masquerade WireGuard traffic to the physical adapter
 	hiddenCommand("powershell", "-NoProfile", "-Command",
-		"New-NetNat -Name 'MscaleExitNat' -InternalIPInterfaceAddressPrefix '100.64.0.0/10' -ErrorAction SilentlyContinue").Run()
-}
-
-func (a *App) activateExitRoute(exitNodeID string) error {
-	if a.deviceID == "" {
-		return fmt.Errorf("device not registered")
-	}
-	payload, _ := json.Marshal(map[string]string{
-		"device_id":    a.deviceID,
-		"exit_node_id": exitNodeID,
-	})
-	req, err := http.NewRequest("POST", apiURL("/api/exit-route/activate"), bytes.NewBuffer(payload))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(parseAPIError(resp))
-	}
-	return nil
-}
-
-func (a *App) ensureExitRouteByKey(publicKeyHex, overlayIP string) {
-	if publicKeyHex == "" || overlayIP == "" {
-		return
-	}
-	body, _ := json.Marshal(map[string]string{
-		"public_key":  publicKeyHex,
-		"overlay_ip":  overlayIP,
-	})
-	req, err := http.NewRequest("POST", apiURL("/api/exit-route/ensure-by-key"), bytes.NewBuffer(body))
-	if err != nil {
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return
-	}
-	resp.Body.Close()
-}
-
-func (a *App) deactivateExitRoute() {
-	if a.deviceID == "" {
-		return
-	}
-	payload, _ := json.Marshal(map[string]string{"device_id": a.deviceID})
-	req, err := http.NewRequest("POST", apiURL("/api/exit-route/deactivate"), bytes.NewBuffer(payload))
-	if err != nil {
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return
-	}
-	resp.Body.Close()
+		"Remove-NetNat -Name 'MscaleExitNat' -Confirm:$false -ErrorAction SilentlyContinue; New-NetNat -Name 'MscaleExitNat' -InternalIPInterfaceAddressPrefix '100.64.0.0/10' -ErrorAction SilentlyContinue").Run()
 }
 
 func (a *App) resolveExitNodeOverlay(exitNodeID string) (string, string, error) {
@@ -444,23 +224,26 @@ func (a *App) ConnectTunnel(mode string, exitNodeID string, dnsSetting string) s
 	pubKeyBytes := privateKey.PublicKey()
 	publicKey := hex.EncodeToString(pubKeyBytes[:])
 
-	deviceID, err := a.ensureDeviceRecord(mode, publicKey)
+	apiClient := a.getAPIClient()
+
+	deviceID, err := apiClient.RegisterDevice(a.deviceName, publicKey, mode, exitNodeID)
 	if err != nil {
 		return "Error: device registration failed — " + err.Error()
 	}
 	a.deviceID = deviceID
 
-	if err := a.updateDevicePublicKey(deviceID, publicKey); err != nil {
+	if err := apiClient.UpdateDeviceKey(deviceID, publicKey); err != nil {
 		return "Error: public key update failed — " + err.Error()
 	}
 
-	enroll, err := a.enrollDevice(deviceID)
+	enroll, err := apiClient.EnrollDevice(deviceID)
 	if err != nil {
 		return "Error: device enrollment failed — " + err.Error()
 	}
 
 	overlayNet := "100.64.0.0/10"
 	a.exitGatewayIP = ""
+	a.activeExitNodeID = ""
 	exitLabel := ""
 
 	if mode == "exit-via" {
@@ -468,19 +251,20 @@ func (a *App) ConnectTunnel(mode string, exitNodeID string, dnsSetting string) s
 			return "Error: pick an exit node device"
 		}
 
-		if err := a.activateExitRoute(exitNodeID); err != nil {
+		if err := apiClient.ActivateExitRoute(deviceID, exitNodeID); err != nil {
 			return "Error: exit routing on server failed — " + err.Error()
 		}
 
 		gw, label, err := a.resolveExitNodeOverlay(exitNodeID)
 		if err != nil {
-			a.deactivateExitRoute()
+			apiClient.DeactivateExitRoute(deviceID)
 			return "Error: " + err.Error()
 		}
 		a.exitGatewayIP = gw
 		exitLabel = label
 		overlayNet = exitInternetWG
 		a.overlayNet = "exit-via"
+		a.activeExitNodeID = exitNodeID
 		a.sharingExit = false
 	} else if mode == "exit-node" {
 		a.overlayNet = overlayNet
@@ -490,18 +274,10 @@ func (a *App) ConnectTunnel(mode string, exitNodeID string, dnsSetting string) s
 		a.sharingExit = false
 	}
 
-	serverKey, err := wgtypes.ParseKey(strings.TrimSpace(enroll.ServerKey))
-	if err != nil {
-		if mode == "exit-via" {
-			a.deactivateExitRoute()
-		}
-		return "Error: Invalid server key"
-	}
-
 	tunDevice, err := createMScaleTUN()
 	if err != nil {
 		if mode == "exit-via" {
-			a.deactivateExitRoute()
+			apiClient.DeactivateExitRoute(deviceID)
 		}
 		return "Error: VPN adapter failed — " + err.Error()
 	}
@@ -512,40 +288,16 @@ func (a *App) ConnectTunnel(mode string, exitNodeID string, dnsSetting string) s
 		a.tunDevice.Close()
 		a.tunDevice = nil
 		if mode == "exit-via" {
-			a.deactivateExitRoute()
+			apiClient.DeactivateExitRoute(deviceID)
 		}
 		return "Error: get adapter name failed"
 	}
 	a.adapterName = adapterName
 
-	logger := device.NewLogger(device.LogLevelError, "[WG] ")
-	wgEngine := device.NewDevice(tunDevice, conn.NewDefaultBind(), logger)
+	wgEngine := wg.NewEngine(privateKey, nil)
 	a.wgEngine = wgEngine
 
-	wgEndpoint := serverIP + ":51820"
-	var wgConfig string
-	if mode == "exit-via" {
-		wgConfig = fmt.Sprintf(
-			"private_key=%s\npublic_key=%s\nendpoint=%s\nallowed_ip=0.0.0.0/1\nallowed_ip=128.0.0.0/1\npersistent_keepalive_interval=25\n",
-			hex.EncodeToString(privateKey[:]),
-			hex.EncodeToString(serverKey[:]),
-			wgEndpoint,
-		)
-	} else {
-		wgConfig = fmt.Sprintf(
-			"private_key=%s\npublic_key=%s\nendpoint=%s\nallowed_ip=%s\npersistent_keepalive_interval=25\n",
-			hex.EncodeToString(privateKey[:]),
-			hex.EncodeToString(serverKey[:]),
-			wgEndpoint,
-			overlayNet,
-		)
-	}
-
-	if err := wgEngine.IpcSet(wgConfig); err != nil {
-		a.teardownTunnel()
-		return "Error: WireGuard config failed — " + err.Error()
-	}
-	if err := wgEngine.Up(); err != nil {
+	if err := wgEngine.Start(tunDevice, enroll.ServerKey, mode == "exit-via"); err != nil {
 		a.teardownTunnel()
 		return "Error: WireGuard up failed — " + err.Error()
 	}
@@ -556,7 +308,7 @@ func (a *App) ConnectTunnel(mode string, exitNodeID string, dnsSetting string) s
 	applyWindowsTunnelRoutes(adapterName, overlayNet, dnsSetting)
 	if mode == "exit-via" {
 		applyExitTunnelRoutes(adapterName)
-		a.ensureExitRouteByKey(publicKey, enroll.OverlayIP)
+		apiClient.EnsureExitRouteByKey(publicKey, enroll.OverlayIP, exitNodeID)
 	}
 
 	a.assignedIP = enroll.OverlayIP
@@ -571,7 +323,7 @@ func (a *App) ConnectTunnel(mode string, exitNodeID string, dnsSetting string) s
 		)
 	}
 	if mode == "exit-node" {
-		if err := a.enableExitNodeOnServer(deviceID, "", ""); err != nil {
+		if err := apiClient.EnableExitNode(deviceID, "US"); err != nil {
 			a.teardownTunnel()
 			return "Error: could not register as exit node — " + err.Error()
 		}
@@ -611,13 +363,11 @@ func (a *App) teardownTunnel() {
 
 	restoreWindowsInternetRoutes(adapter, overlay)
 
-	// Clean up NAT
 	hiddenCommand("powershell", "-NoProfile", "-Command",
 		"Remove-NetNat -Name 'MscaleExitNat' -Confirm:$false -ErrorAction SilentlyContinue").Run()
 
 	if a.wgEngine != nil {
-		a.wgEngine.Down()
-		a.wgEngine.Close()
+		a.wgEngine.Stop()
 		a.wgEngine = nil
 	}
 	if a.tunDevice != nil {
@@ -626,45 +376,29 @@ func (a *App) teardownTunnel() {
 	}
 
 	a.exitGatewayIP = ""
+	a.activeExitNodeID = ""
 	a.adapterName = ""
 	a.overlayNet = ""
 	a.assignedIP = ""
 	a.sharingExit = false
 	a.deviceID = ""
 
+	apiClient := a.getAPIClient()
+
 	if sharing && deviceID != "" {
-		id := deviceID
 		go func() {
-			_ = a.disableExitNodeOnServer(id)
+			_ = apiClient.DisableExitNode(deviceID)
 		}()
 	}
 
 	if exitGW != "" && deviceID != "" {
-		id := deviceID
 		go func() {
-			a.deviceID = id
-			a.deactivateExitRoute()
-			a.deviceID = ""
+			_ = apiClient.DeactivateExitRoute(deviceID)
 		}()
 	}
 
 	if deviceID != "" {
-		id := deviceID
-		go a.postOfflineStatus(id)
-	}
-}
-
-func (a *App) postOfflineStatus(deviceID string) {
-	payload := map[string]string{"status": "offline", "peer_id": deviceID}
-	body, _ := json.Marshal(payload)
-	req, err := http.NewRequest("POST", apiURL("/status/update"), bytes.NewBuffer(body))
-	if err != nil {
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 4 * time.Second}
-	if resp, err := client.Do(req); err == nil {
-		resp.Body.Close()
+		go apiClient.PostStatus(deviceID, "offline")
 	}
 }
 
@@ -681,12 +415,11 @@ func (a *App) GetStatus() string {
 	return fmt.Sprintf("Connected — IP: %s | %s", a.assignedIP, a.loggedInUser)
 }
 
-
 func (a *App) getUsageStats() string {
-	if a.wgEngine == nil {
+	if a.wgEngine == nil || a.wgEngine.Device == nil {
 		return ""
 	}
-	uapi, err := a.wgEngine.IpcGet()
+	uapi, err := a.wgEngine.Device.IpcGet()
 	if err != nil {
 		return ""
 	}
@@ -725,4 +458,3 @@ func (a *App) getUsageStats() string {
 	
 	return fmt.Sprintf(" \nSession Usage: Downloaded: %s | Uploaded: %s", formatBytes(rxTotal), formatBytes(txTotal))
 }
-

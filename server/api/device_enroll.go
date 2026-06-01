@@ -55,10 +55,37 @@ func normalizeWGPublicKey(key string) (string, error) {
 	return "", fmt.Errorf("invalid WireGuard public key format")
 }
 
-func nextOverlayIP() string {
+func nextOverlayIP(db *sql.DB) string {
 	wgMu.Lock()
 	defer wgMu.Unlock()
-	wgPeerCount++
+	
+	// Default to 100.64.1.1 (so first is 100.64.1.2)
+	maxLastOctet := 1
+	
+	rows, err := db.Query("SELECT overlay_ip FROM devices WHERE overlay_ip IS NOT NULL AND overlay_ip != ''")
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var ip string
+			if err := rows.Scan(&ip); err == nil {
+				// Parse 100.64.1.X
+				var octet int
+				if n, _ := fmt.Sscanf(ip, "100.64.1.%d", &octet); n == 1 {
+					if octet > maxLastOctet {
+						maxLastOctet = octet
+					}
+				}
+			}
+		}
+	}
+	
+	// Also make sure we don't go backwards if wgPeerCount is somehow higher
+	if maxLastOctet >= wgPeerCount {
+		wgPeerCount = maxLastOctet + 1
+	} else {
+		wgPeerCount++
+	}
+	
 	return fmt.Sprintf("100.64.1.%d", wgPeerCount)
 }
 
@@ -107,7 +134,7 @@ func (h *AuthHandler) EnrollDevice(w http.ResponseWriter, r *http.Request) {
 
 	if currentOverlayIP.Valid && currentOverlayIP.String != "" {
 		pruneWGZombiePeers()
-		_ = syncWGPeer(currentOverlayIP.String, publicKey, "")
+		_ = h.syncHubPeerForDevice(deviceID, currentOverlayIP.String, publicKey)
 
 		var tunnelMode, exitNodeID sql.NullString
 		_ = h.DB.QueryRow(
@@ -148,9 +175,9 @@ func (h *AuthHandler) EnrollDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	overlayIP := nextOverlayIP()
+	overlayIP := nextOverlayIP(h.DB)
 
-	if err := syncWGPeer(overlayIP, publicKey, ""); err != nil {
+	if err := h.syncHubPeerForDevice(deviceID, overlayIP, publicKey); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error":   "could not add peer to wg0",
 			"details": err.Error(),

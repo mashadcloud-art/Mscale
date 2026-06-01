@@ -2,7 +2,10 @@ package com.mscale.app
 
 import android.Manifest
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.net.VpnService
@@ -21,6 +24,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -66,6 +71,28 @@ class MainActivity : ComponentActivity() {
     private var wakePhoneInput by mutableStateOf("")
     private var deviceMyPhone by mutableStateOf("")
 
+    private val vpnStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                MscaleVpnService.ACTION_VPN_CONNECTED -> {
+                    isConnectedState.value = true
+                }
+                MscaleVpnService.ACTION_VPN_FAILED -> {
+                    isConnectedState.value = false
+                    val err = intent.getStringExtra(MscaleVpnService.EXTRA_VPN_ERROR).orEmpty()
+                    if (err.isNotEmpty()) {
+                        Toast.makeText(this@MainActivity, err, Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(this@MainActivity, "VPN connection failed", Toast.LENGTH_LONG).show()
+                    }
+                }
+                MscaleVpnService.ACTION_VPN_DISCONNECTED -> {
+                    isConnectedState.value = false
+                }
+            }
+        }
+    }
+
     private val vpnPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             startVpnService()
@@ -87,7 +114,8 @@ class MainActivity : ComponentActivity() {
         vpnController = mscalecore.Mscalecore.newVpnController()
         sessionToken = WakePrefs.getToken(this)
         shareAsExit = WakePrefs.isShareAsExit(this)
-        shareCountry = WakePrefs.getShareCountry(this).ifEmpty { defaultExitCountry() }
+        shareCountry = defaultExitCountry()
+        WakePrefs.setShareCountry(this, shareCountry)
         shareExitMode = WakePrefs.getRoutingMode(this).ifEmpty { "mesh" }
         selectedExitNodeId = WakePrefs.getSelectedExitNodeId(this)
         wakeRemoteEnabled = WakePrefs.isWakeEnabled(this)
@@ -95,8 +123,21 @@ class MainActivity : ComponentActivity() {
         wakeWifiAwake = WakePrefs.isWakeWifiAwakeEnabled(this)
         deviceMyPhone = WakePrefs.getDevicePhone(this)
         dnsServer = WakePrefs.getDnsServer(this)
+
+        val vpnFilter = IntentFilter().apply {
+            addAction(MscaleVpnService.ACTION_VPN_CONNECTED)
+            addAction(MscaleVpnService.ACTION_VPN_DISCONNECTED)
+            addAction(MscaleVpnService.ACTION_VPN_FAILED)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(vpnStateReceiver, vpnFilter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(vpnStateReceiver, vpnFilter)
+        }
         
         setContent {
+            val isConnected by isConnectedState
             val themeMode = WakePrefs.getThemeMode(this@MainActivity)
             val isDark = when (themeMode) {
                 1 -> false
@@ -128,7 +169,7 @@ class MainActivity : ComponentActivity() {
                         DashboardScreen(
                             vpnController = vpnController,
                             sessionToken = sessionToken,
-                            isConnected = isConnectedState.value,
+                            isConnected = isConnected,
                             onExitNodeSelected = {
                                 selectedExitNodeId = it
                                 WakePrefs.setSelectedExitNodeId(this@MainActivity, it)
@@ -136,8 +177,6 @@ class MainActivity : ComponentActivity() {
                             },
                             shareAsExit = shareAsExit,
                             onShareAsExitChanged = { applyShareAsExit(it) },
-                            shareCountry = shareCountry,
-                            onShareCountryChanged = { shareCountry = it },
                             shareExitMode = shareExitMode,
                             onShareExitModeChanged = {
                                 shareExitMode = it
@@ -179,6 +218,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        try {
+            unregisterReceiver(vpnStateReceiver)
+        } catch (_: Exception) {
+        }
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -273,20 +320,15 @@ class MainActivity : ComponentActivity() {
         intent.removeExtra(EXTRA_AUTO_WAKE)
     }
 
-    private fun defaultExitCountry(): String {
-        val cc = resources.configuration.locales[0].country.uppercase()
-        return if (cc.length == 2) cc else "IN"
-    }
+    private fun defaultExitCountry(): String = PhoneUtils.readCountryCode(this)
 
-    /** Tailscale-style: toggle on → connect as exit node; toggle off → stop sharing. */
-    private fun applyShareAsExit(enabled: Boolean, autoConnect: Boolean = true) {
+    /** Toggle exit-share preference; VPN starts only when user taps Connect & share (or main Connect). */
+    private fun applyShareAsExit(enabled: Boolean, autoConnect: Boolean = false) {
         shareAsExit = enabled
         WakePrefs.setShareAsExit(this, enabled)
         if (enabled) {
-            if (shareCountry.isEmpty()) {
-                shareCountry = defaultExitCountry()
-                WakePrefs.setShareCountry(this, shareCountry)
-            }
+            shareCountry = defaultExitCountry()
+            WakePrefs.setShareCountry(this, shareCountry)
             shareExitMode = "mesh"
             selectedExitNodeId = ""
             WakePrefs.setRoutingMode(this, "mesh")
@@ -311,7 +353,7 @@ class MainActivity : ComponentActivity() {
         if (shareAsExit) {
             // sharing as exit — mesh routing only
         } else if (shareExitMode == "exit_node" && selectedExitNodeId.isEmpty()) {
-            Toast.makeText(this, "Select an exit server first (Servers tab → pick India/UAE)", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Select an exit server first (Servers tab)", Toast.LENGTH_LONG).show()
             return
         }
         val intent = VpnService.prepare(this)
@@ -325,6 +367,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startVpnService() {
+        if (shareAsExit) {
+            shareCountry = defaultExitCountry()
+            WakePrefs.setShareCountry(this, shareCountry)
+        }
         val useExitRouting = !shareAsExit && shareExitMode == "exit_node" && selectedExitNodeId.isNotEmpty()
         val intent = Intent(this, MscaleVpnService::class.java).apply {
             putExtra(MscaleVpnService.EXTRA_TOKEN, sessionToken)
@@ -334,21 +380,27 @@ class MainActivity : ComponentActivity() {
             putExtra(MscaleVpnService.EXTRA_DNS_SERVER, dnsServer)
             putExtra(MscaleVpnService.EXTRA_EXIT_NODE_ID, if (useExitRouting) selectedExitNodeId else "")
         }
-        startService(intent)
-        isConnectedState.value = true
+        startForegroundService(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        syncVpnConnectedState()
+    }
+
+    private fun syncVpnConnectedState() {
+        if (!MscaleVpnService.isRunning) {
+            isConnectedState.value = false
+        }
     }
 
     private fun stopVpnService() {
-        val wasExitShare = shareAsExit
+        isConnectedState.value = false
         val intent = Intent(this, MscaleVpnService::class.java).apply {
             action = MscaleVpnService.ACTION_DISCONNECT
         }
         startService(intent)
-        isConnectedState.value = false
-        if (wasExitShare) {
-            shareAsExit = false
-            WakePrefs.setShareAsExit(this, false)
-        }
+        mainHandler.postDelayed({ syncVpnConnectedState() }, 800)
     }
     
     companion object {
@@ -369,8 +421,6 @@ fun DashboardScreen(
     onExitNodeSelected: (String) -> Unit,
     shareAsExit: Boolean,
     onShareAsExitChanged: (Boolean) -> Unit,
-    shareCountry: String,
-    onShareCountryChanged: (String) -> Unit,
     shareExitMode: String,
     onShareExitModeChanged: (String) -> Unit,
     dnsServer: String,
@@ -396,7 +446,8 @@ fun DashboardScreen(
     var selectedExitId by remember { mutableStateOf(WakePrefs.getSelectedExitNodeId(ctx)) }
     val exitOptions = remember { mutableStateListOf<ExitNodeOption>() }
     var showExitPrompt by remember { mutableStateOf(false) }
-    var autoStartedExit by remember { mutableStateOf(false) }
+    var exitNodesLoading by remember { mutableStateOf(false) }
+    val exitScope = rememberCoroutineScope()
     
     val userName = remember { WakePrefs.getUserName(ctx).ifEmpty { "User" } }
     val userEmail = remember { WakePrefs.getUserEmail(ctx) }
@@ -442,15 +493,8 @@ fun DashboardScreen(
         }
     }
 
-    LaunchedEffect(sessionToken, shareAsExit) {
-        if (!autoStartedExit && sessionToken.isNotEmpty() && shareAsExit && !isConnected) {
-            autoStartedExit = true
-            kotlinx.coroutines.delay(600)
-            onConnectRequest()
-        }
-    }
-    
-    LaunchedEffect(sessionToken) {
+    suspend fun loadExitNodes(autoSelect: Boolean) {
+        exitNodesLoading = true
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val jsonStr = vpnController.fetchExitNodes(sessionToken)
@@ -458,12 +502,17 @@ fun DashboardScreen(
                 val nodes = mutableListOf<ExitNodeOption>()
                 var indiaId = ""
                 var indiaLabel = ""
+                val myDeviceId = WakePrefs.getDeviceId(ctx)
+                val myDeviceName = WakePrefs.getDeviceName(ctx)
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
                     val id = obj.optString("id", "")
                     if (id.isEmpty()) continue
-                    val country = obj.optString("country_code", obj.optString("label", "Exit"))
+                    val nodeDeviceId = obj.optString("device_id", "")
                     val deviceName = obj.optString("device_name", "node")
+                    if (nodeDeviceId.isNotEmpty() && nodeDeviceId == myDeviceId) continue
+                    if (myDeviceName.isNotEmpty() && deviceName.equals(myDeviceName, ignoreCase = true)) continue
+                    val country = obj.optString("country_code", obj.optString("label", "Exit"))
                     val label = "$country ($deviceName)"
                     nodes.add(ExitNodeOption(id, label, country))
                     if (country.equals("IN", true) || country.contains("India", true)) {
@@ -474,6 +523,7 @@ fun DashboardScreen(
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     exitOptions.clear()
                     exitOptions.addAll(nodes)
+                    if (!autoSelect) return@withContext
                     val savedId = selectedExitId.ifEmpty { WakePrefs.getSelectedExitNodeId(ctx) }
                     if (savedId.isNotEmpty()) {
                         val match = nodes.find { it.id == savedId }
@@ -492,6 +542,15 @@ fun DashboardScreen(
                 }
             } catch (_: Exception) { }
         }
+        exitNodesLoading = false
+    }
+
+    LaunchedEffect(sessionToken) {
+        if (sessionToken.isNotEmpty()) loadExitNodes(autoSelect = true)
+    }
+
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 1 && sessionToken.isNotEmpty()) loadExitNodes(autoSelect = false)
     }
 
     val isDark = when (themeMode) {
@@ -516,8 +575,8 @@ fun DashboardScreen(
             title = { Text("Run as exit node?", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "Allow other devices on your account to route internet traffic through this phone.\n\n" +
-                        "You can turn this on or off anytime from the home screen.",
+                    "Allow other devices on your account to route internet through this phone.\n\n" +
+                        "Turn on the switch, then tap Connect & share.",
                     color = textSecondary
                 )
             },
@@ -598,6 +657,8 @@ fun DashboardScreen(
                     exitOptions = exitOptions,
                     selectedExitId = selectedExitId,
                     isConnected = isConnected,
+                    isLoading = exitNodesLoading,
+                    onRefresh = { exitScope.launch { loadExitNodes(autoSelect = false) } },
                     shareExitMode = shareExitMode,
                     onShareExitModeChanged = onShareExitModeChanged,
                     onExitSelected = { id, label ->
@@ -726,6 +787,8 @@ fun HomeScreen(
                 Text(text = if (isDark) "☀️" else "🌙", fontSize = 20.sp)
             }
         }
+        
+        PublicLocationBadge(isConnected = isConnected, isDark = isDark)
 
         // Shield Area
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -754,47 +817,51 @@ fun HomeScreen(
             }
         }
 
-        // Run as exit node — Tailscale-style (one switch on home)
-        Card(
+        // Entrance & Exit Grid
+        Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (shareAsExit) Color(0xFF1E1B4B) else cardDark
-            ),
-            shape = RoundedCornerShape(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Entrance
+            Card(
+                modifier = Modifier.weight(1f).height(100.dp).clickable { onNavigateToServers() },
+                colors = CardDefaults.cardColors(containerColor = cardDark),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (routingMode == "exit_node") Color(0xFF8B5CF6) else androidx.compose.material3.MaterialTheme.colorScheme.outlineVariant)
             ) {
-                Icon(
-                    Icons.Default.Share,
-                    contentDescription = null,
-                    tint = if (shareAsExit) Color(0xFFA78BFA) else textSecondary,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Run as exit node",
-                        color = textPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                    Text(
-                        when {
-                            shareAsExit && isConnected -> "Active — other devices can use this phone's internet"
-                            shareAsExit -> "Connecting… keep the app open"
-                            else -> "Let other devices route traffic through this phone"
-                        },
-                        color = textSecondary,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(if (routingMode == "exit_node") Color(0xFF8B5CF6).copy(alpha=0.2f) else Color(0xFFEEF2FF).copy(alpha=if(isDark) 0.1f else 1f)), contentAlignment = Alignment.Center) {
+                        Icon(androidx.compose.material.icons.Icons.Default.KeyboardArrowDown, contentDescription = null, tint = if (routingMode == "exit_node") Color(0xFF8B5CF6) else Color(0xFF6366F1))
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Entrance", fontWeight = FontWeight.Bold, color = textPrimary, fontSize = 14.sp)
+                    Text("CONNECT TO", fontSize = 10.sp, color = textSecondary, fontWeight = FontWeight.Bold)
                 }
-                Switch(
-                    checked = shareAsExit,
-                    onCheckedChange = onShareAsExitChanged
-                )
+            }
+            
+            // Exit
+            Card(
+                modifier = Modifier.weight(1f).height(100.dp).clickable { onShareAsExitChanged(!shareAsExit) },
+                colors = CardDefaults.cardColors(containerColor = if (shareAsExit) Color(0xFF1E1B4B) else cardDark),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (shareAsExit) Color(0xFF8B5CF6) else androidx.compose.material3.MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(if (shareAsExit) Color(0xFF8B5CF6).copy(alpha=0.2f) else Color(0xFFEEF2FF).copy(alpha=if(isDark) 0.1f else 1f)), contentAlignment = Alignment.Center) {
+                        Icon(androidx.compose.material.icons.Icons.Default.KeyboardArrowUp, contentDescription = null, tint = if (shareAsExit) Color(0xFF8B5CF6) else Color(0xFF6366F1))
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Exit", fontWeight = FontWeight.Bold, color = if (shareAsExit) Color.White else textPrimary, fontSize = 14.sp)
+                    Text("SHARE INTERNET", fontSize = 10.sp, color = if (shareAsExit) Color(0xFFA5B4FC) else textSecondary, fontWeight = FontWeight.Bold)
+                }
             }
         }
 
@@ -839,7 +906,7 @@ fun HomeScreen(
             }
             if (selectedExitLabel.isEmpty()) {
                 Text(
-                    "Pick India or UAE under Servers before connecting for exit IP.",
+                    "Pick an exit server under Servers before connecting for exit IP.",
                     color = Color(0xFFF59E0B),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 8.dp)
@@ -853,20 +920,33 @@ fun HomeScreen(
 @Composable
 fun ServersScreen(
     exitOptions: List<ExitNodeOption>, selectedExitId: String, isConnected: Boolean,
+    isLoading: Boolean, onRefresh: () -> Unit,
     shareExitMode: String, onShareExitModeChanged: (String) -> Unit,
     onExitSelected: (String, String) -> Unit,
     cardDark: Color, textPrimary: Color, textSecondary: Color
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp).verticalScroll(rememberScrollState())) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                "Entrance Options",
+                color = textPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+            IconButton(onClick = onRefresh, enabled = !isLoading) {
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh entrance nodes", tint = textSecondary)
+                }
+            }
+        }
         Text(
-            "Use exit node",
-            color = textPrimary,
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        Text(
-            "Route your traffic through another device on your account.",
+            "Select an Entrance device to route your traffic through.",
             color = textSecondary,
             fontSize = 13.sp,
             modifier = Modifier.padding(bottom = 16.dp)
@@ -933,7 +1013,14 @@ fun ServersScreen(
             }
                 }
                 if (exitOptions.isEmpty()) {
-                    Text("No exit nodes available", color = textSecondary, fontSize = 14.sp, modifier = Modifier.padding(vertical = 16.dp))
+                    Text(
+                        "No exit nodes available.\n\n" +
+                            "On your Xiaomi: turn Run as exit node ON, tap Connect, and keep it connected.\n\n" +
+                            "On this phone: turn Run as exit node OFF, then open this tab again.",
+                        color = textSecondary,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
                 }
             }
         }
@@ -1133,6 +1220,68 @@ private fun AccountDetailRow(label: String, value: String, textPrimary: Color, t
     Column {
         Text(label.uppercase(), color = textSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Text(value, color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+fun PublicLocationBadge(isConnected: Boolean, isDark: Boolean) {
+    var locationText by remember { mutableStateOf("Fetching...") }
+
+    LaunchedEffect(isConnected) {
+        if (!isConnected) {
+            locationText = "Not connected"
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(1500)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val url = java.net.URL("https://ipwho.is/")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                if (conn.responseCode == 200) {
+                    val stream = conn.inputStream.bufferedReader().readText()
+                    val obj = org.json.JSONObject(stream)
+                    val city = obj.optString("city", "")
+                    val country = obj.optString("country", "")
+                    if (city.isNotEmpty() && country.isNotEmpty()) {
+                        locationText = "$city, $country"
+                    } else {
+                        locationText = "Unknown Location"
+                    }
+                } else {
+                    locationText = "Offline / Unknown"
+                }
+            } catch (e: Exception) {
+                locationText = "Offline / Unknown"
+            }
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp),
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            color = if (isDark) Color(0xFF312E81).copy(alpha = 0.2f) else Color(0xFFEEF2FF),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.dp, if (isDark) Color(0xFF3730A3) else Color(0xFFE0E7FF), RoundedCornerShape(16.dp))
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("📍", fontSize = 14.sp)
+                Spacer(modifier = Modifier.width(6.dp))
+                Column(horizontalAlignment = Alignment.Start) {
+                    Text("YOUR LOCATION", color = if (isDark) Color(0xFF6366F1) else Color(0xFF818CF8), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text(locationText, color = if (isDark) Color(0xFFA5B4FC) else Color(0xFF4338CA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
 

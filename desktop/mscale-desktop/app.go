@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun"
+	"mscale.core/wg"
 )
 
 const (
@@ -32,11 +32,12 @@ type App struct {
 	deviceName   string
 	overlayNet   string
 	exitGatewayIP string
+	activeExitNodeID string
 	loggedInUser     string
 	currentUserEmail string
 	sharingExit      bool
 
-	wgEngine    *device.Device
+	wgEngine    *wg.Engine
 	tunDevice   tun.Device
 	adapterName string
 
@@ -119,7 +120,7 @@ func (a *App) shutdown(ctx context.Context) {
 	a.stopHeartbeat()
 
 	if a.wgEngine != nil {
-		a.wgEngine.Close()
+		a.wgEngine.Stop()
 	}
 	if a.tunDevice != nil {
 		a.tunDevice.Close()
@@ -228,6 +229,41 @@ func (a *App) Login(email string, password string) string {
 	return "Success: Logged in as " + a.loggedInUser
 }
 
+func (a *App) CreateAccount(name string, email string, password string) string {
+	a.prepareForNewLogin()
+
+	name = strings.TrimSpace(name)
+	email = strings.TrimSpace(strings.ToLower(email))
+	if name == "" || email == "" || password == "" {
+		return "Error: name, email, and password are required"
+	}
+
+	payload := map[string]string{
+		"name":     name,
+		"email":    email,
+		"password": password,
+	}
+	body, _ := json.Marshal(payload)
+
+	req, err := http.NewRequest("POST", apiURL("/api/auth/register"), bytes.NewBuffer(body))
+	if err != nil {
+		return "Error: Failed to build request"
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return fmt.Sprintf("Error: Could not reach server — %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return "Error: " + parseAPIError(resp)
+	}
+
+	return a.Login(email, password)
+}
+
 func (a *App) GetLoggedInUser() string {
 	return a.loggedInUser
 }
@@ -278,6 +314,9 @@ func (a *App) startHeartbeatLoop() {
 			select {
 			case <-ticker.C:
 				a.sendHeartbeat()
+				if a.activeExitNodeID != "" && a.deviceID != "" {
+					_ = a.getAPIClient().ActivateExitRoute(a.deviceID, a.activeExitNodeID)
+				}
 			case <-a.stopHeart:
 				a.heartRunning = false
 				return

@@ -507,12 +507,12 @@ func (h *AuthHandler) AdminRouteDevice(w http.ResponseWriter, r *http.Request) {
 		if activeExitClientIP != "" && activeExitClientIP != clientOverlay {
 			clearClientExitPolicy(activeExitClientIP)
 		}
-		if err := ensureClientExitPolicy(clientOverlay); err != nil {
+		if err := ensureClientExitPolicy(clientOverlay, exitOverlay); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hub exit policy failed", "details": err.Error()})
 			return
 		}
-		if err := ensureHubExitNAT(); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hub NAT failed", "details": err.Error()})
+		if err := ensureMobileExitPath(); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hub forwarding failed", "details": err.Error()})
 			return
 		}
 		exitB64, _ := normalizeWGPublicKey(exitPubKey)

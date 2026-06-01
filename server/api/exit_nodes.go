@@ -105,6 +105,15 @@ func (h *AuthHandler) EnableExitNode(w http.ResponseWriter, r *http.Request) {
 
 	_, _ = h.DB.Exec(`UPDATE devices SET exit_node_id = ? WHERE id = ? AND user_id = ?`, exitNodeID, req.DeviceID, session.UserID)
 
+	var overlayIP, pubKey string
+	_ = h.DB.QueryRow(
+		`SELECT overlay_ip, public_key FROM devices WHERE id = ? AND user_id = ?`,
+		req.DeviceID, session.UserID,
+	).Scan(&overlayIP, &pubKey)
+	if overlayIP != "" && pubKey != "" {
+		_ = syncExitNodePeer(overlayIP, pubKey)
+	}
+
 	NotifyDevicesChanged()
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message":      "device is now an exit node",
@@ -230,7 +239,8 @@ func (h *AuthHandler) ListExitNodes(w http.ResponseWriter, r *http.Request) {
 		list = []ExitNodeListItem{}
 	}
 	isHubExit := GetSetting(h.DB, "hub_is_exit_node", "false")
-	if isHubExit == "true" {
+	// Only offer hub exit when no phone/PC exit nodes exist — hub exit uses Oracle IP, not mobile.
+	if isHubExit == "true" && len(list) == 0 {
 		hubCountry := "IN"
 		list = append(list, ExitNodeListItem{
 			ID:          "hub",

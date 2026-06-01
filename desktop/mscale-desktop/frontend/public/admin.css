@@ -478,21 +478,35 @@ h4 { font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-sp
   border-radius: var(--radius-xl);
   overflow: hidden;
   border: 1px solid rgba(79, 70, 229, 0.2);
-  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%);
+  background: #E7EAF2;
   padding: 1.5rem 2rem;
   margin-bottom: 2rem;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+  min-height: 200px;
+}
+
+[data-theme="dark"] .banner-card {
+  background: #000000;
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
 }
 
 .banner-bg {
   position: absolute;
-  right: 0;
-  top: 0;
+  inset: 0;
+  width: 100%;
   height: 100%;
-  opacity: 0.6;
+  object-fit: contain;
+  object-position: right center;
+  opacity: 0.85;
   pointer-events: none;
-  mask-image: linear-gradient(to right, transparent, black 80%);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 80%);
+}
+
+[data-theme="dark"] .banner-bg {
+  opacity: 1;
+  object-fit: contain;
+  object-position: right center;
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 
 /* Modals */

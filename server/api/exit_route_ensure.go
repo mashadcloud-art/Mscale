@@ -86,18 +86,9 @@ func (h *AuthHandler) EnsureExitRouteByKey(w http.ResponseWriter, r *http.Reques
 		exitNodeID = sql.NullString{String: req.ExitNodeID, Valid: true}
 	}
 	if !exitNodeID.Valid || exitNodeID.String == "" {
-		_ = h.DB.QueryRow(
-			`SELECT en.id FROM exit_nodes en
-			 INNER JOIN devices d ON d.id = en.device_id
-			 WHERE en.is_enabled = 1
-			 ORDER BY CASE WHEN en.country_code = 'IN' THEN 0 ELSE 1 END LIMIT 1`,
-		).Scan(&exitNodeID.String)
-		if exitNodeID.String != "" {
-			exitNodeID.Valid = true
-		}
-	}
-	if !exitNodeID.Valid {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no exit node available"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "no exit node configured for this device — pick an exit in the app and connect again",
+		})
 		return
 	}
 
@@ -142,10 +133,12 @@ func applyHubExitRouting(clientOverlay, clientPubKey, exitOverlay, exitPubKey st
 	if activeExitClientIP != "" && activeExitClientIP != clientOverlay {
 		clearClientExitPolicy(activeExitClientIP)
 	}
-	if err := ensureClientExitPolicy(clientOverlay); err != nil {
+	if err := ensureClientExitPolicy(clientOverlay, exitOverlay); err != nil {
 		return err
 	}
-	_ = ensureHubExitNAT()
+	if err := ensureMobileExitPath(); err != nil {
+		return err
+	}
 	activeExitPeer = exitB64
 	activeExitOverlay = exitOverlay
 	activeExitClientIP = clientOverlay

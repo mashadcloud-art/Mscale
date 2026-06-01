@@ -115,24 +115,29 @@ func (h *AuthHandler) ActivateExitRoute(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if req.ExitNodeID != "hub" {
-		if err := ensureClientExitPolicy(clientOverlay); err != nil {
+		if err := ensureClientExitPolicy(clientOverlay, exitOverlay); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{
 				"error":   "hub exit policy failed (sudo ip rule/route on ph)",
 				"details": err.Error(),
 			})
 			return
 		}
+		if err := ensureMobileExitPath(); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error":   "hub forwarding setup failed",
+				"details": err.Error(),
+			})
+			return
+		}
 	} else {
-		// Clear it just in case it was set previously
 		clearClientExitPolicy(clientOverlay)
-	}
-
-	if err := ensureHubExitNAT(); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error":   "hub NAT setup failed",
-			"details": err.Error(),
-		})
-		return
+		if err := ensureHubSelfExitNAT(); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error":   "hub NAT setup failed",
+				"details": err.Error(),
+			})
+			return
+		}
 	}
 
 	activeExitPeer = exitB64
@@ -200,14 +205,18 @@ func (h *AuthHandler) reapplyExitRouteForDevice(deviceID, exitNodeID, userID str
 	}
 
 	if exitNodeID != "hub" {
-		if err := ensureClientExitPolicy(clientOverlay); err != nil {
+		if err := ensureClientExitPolicy(clientOverlay, exitOverlay); err != nil {
+			return err
+		}
+		if err := ensureMobileExitPath(); err != nil {
 			return err
 		}
 	} else {
 		clearClientExitPolicy(clientOverlay)
+		if err := ensureHubSelfExitNAT(); err != nil {
+			return err
+		}
 	}
-
-	_ = ensureHubExitNAT()
 	activeExitPeer = exitB64
 	activeExitOverlay = exitOverlay
 	activeExitClientIP = clientOverlay

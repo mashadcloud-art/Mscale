@@ -29,29 +29,80 @@ const SHARE_AS_EXIT_KEY = 'mscale_share_as_exit';
 const EXIT_PROMPT_SHOWN_KEY = 'mscale_exit_prompt_shown';
 
 let shareAsExit = localStorage.getItem(SHARE_AS_EXIT_KEY) === '1';
+let authMode = 'signin'; // 'signin' | 'create'
+
+function setAuthMode(mode) {
+    authMode = mode === 'create' ? 'create' : 'signin';
+    const isCreate = authMode === 'create';
+
+    document.getElementById('register-name-field')?.classList.toggle('hidden', !isCreate);
+    document.getElementById('register-confirm-field')?.classList.toggle('hidden', !isCreate);
+    document.getElementById('signin-options-row')?.classList.toggle('hidden', isCreate);
+    document.getElementById('oauth-divider')?.classList.toggle('hidden', isCreate);
+    document.getElementById('oauth-buttons')?.classList.toggle('hidden', isCreate);
+    document.getElementById('saved-accounts-panel')?.classList.toggle('hidden', isCreate);
+
+    const heading = document.getElementById('auth-heading');
+    const subheading = document.getElementById('auth-subheading');
+    const submitLabel = document.getElementById('auth-submit-label');
+    const toggleHint = document.getElementById('auth-toggle-hint');
+    const toggleBtn = document.getElementById('auth-mode-toggle');
+    const passwordInput = document.getElementById('password');
+
+    if (heading) heading.innerText = isCreate ? 'Create your account' : 'Welcome to Mscale';
+    if (subheading) {
+        subheading.innerText = isCreate
+            ? 'Set up a new Mscale account to connect your devices'
+            : 'Secure your mesh network with a single click';
+    }
+    if (submitLabel) submitLabel.innerText = isCreate ? 'Create account' : 'Sign in';
+    if (toggleHint) toggleHint.innerText = isCreate ? 'Already have an account?' : "Don't have an account?";
+    if (toggleBtn) toggleBtn.innerText = isCreate ? 'Sign in' : 'Create account';
+    if (passwordInput) passwordInput.autocomplete = isCreate ? 'new-password' : 'current-password';
+
+    setTimeout(updateLoginScrollFade, 50);
+}
+
+window.toggleAuthMode = function () {
+    hideLoginError();
+    setAuthMode(authMode === 'create' ? 'signin' : 'create');
+};
+
+window.submitAuth = function () {
+    if (authMode === 'create') {
+        createAccountUser();
+    } else {
+        loginUser();
+    }
+};
 
 function updateExitShareUI() {
     const toggle = document.getElementById('exit-share-toggle');
+    const newBtnBg = document.getElementById('exit-active-bg');
+    const newBtnIcon = document.getElementById('exit-icon-bg');
     const hint = document.getElementById('exit-share-hint');
-    const cardInner = document.getElementById('exit-share-card-inner');
-    const routingCard = document.getElementById('routing-mode-card');
+    
     if (toggle) toggle.checked = shareAsExit;
-    if (hint) {
-        if (shareAsExit && isConnected) {
-            hint.textContent = 'Active — other devices can use this PC';
-        } else if (shareAsExit) {
-            hint.textContent = 'Connecting… keep the app open';
+    
+    if (newBtnBg && newBtnIcon && hint) {
+        if (shareAsExit) {
+            newBtnBg.classList.remove('opacity-0');
+            newBtnBg.classList.add('opacity-100');
+            newBtnIcon.classList.remove('text-indigo-600', 'dark:text-indigo-400', 'bg-indigo-100', 'dark:bg-indigo-900/40');
+            newBtnIcon.classList.add('text-white', 'bg-white/20');
+            hint.textContent = isConnected ? 'Active — other devices can use this PC' : 'Sharing Active';
+            hint.classList.remove('text-gray-400', 'dark:text-gray-500');
+            hint.classList.add('text-indigo-100');
         } else {
-            hint.textContent = 'Share this PC\'s internet with your other devices';
+            newBtnBg.classList.remove('opacity-100');
+            newBtnBg.classList.add('opacity-0');
+            newBtnIcon.classList.add('text-indigo-600', 'dark:text-indigo-400', 'bg-indigo-100', 'dark:bg-indigo-900/40');
+            newBtnIcon.classList.remove('text-white', 'bg-white/20');
+            hint.textContent = 'Share Internet';
+            hint.classList.add('text-gray-400', 'dark:text-gray-500');
+            hint.classList.remove('text-indigo-100');
         }
     }
-    if (cardInner) {
-        cardInner.classList.toggle('ring-2', shareAsExit);
-        cardInner.classList.toggle('ring-indigo-400/50', shareAsExit);
-        cardInner.classList.toggle('bg-indigo-50', shareAsExit);
-        cardInner.classList.toggle('dark:bg-indigo-950/30', shareAsExit);
-    }
-    routingCard?.classList.toggle('hidden', shareAsExit);
 }
 
 function showExitPromptIfNeeded() {
@@ -158,22 +209,41 @@ function displayNameOnly(label) {
     return label;
 }
 
-function updateLoginScrollFade() {
-    const shell = document.getElementById('login-section');
-    const scroller = document.getElementById('login-scroll');
-    if (!shell || !scroller) return;
+function updatePanelScrollFade(shellId, scrollId) {
+    const shell = document.getElementById(shellId);
+    const scroller = document.getElementById(scrollId);
+    if (!shell || !scroller || shell.classList.contains('hidden')) return;
 
     const maxScroll = scroller.scrollHeight - scroller.clientHeight;
     shell.classList.toggle('can-scroll-up', scroller.scrollTop > 8);
     shell.classList.toggle('can-scroll-down', maxScroll > 8 && scroller.scrollTop < maxScroll - 8);
 }
 
+function updateLoginScrollFade() {
+    updatePanelScrollFade('login-section', 'login-scroll');
+}
+
+function updateVpnScrollFade() {
+    updatePanelScrollFade('vpn-section', 'vpn-scroll');
+}
+
 function initLoginScrollFade() {
     const scroller = document.getElementById('login-scroll');
     if (!scroller) return;
     scroller.addEventListener('scroll', updateLoginScrollFade, { passive: true });
-    window.addEventListener('resize', updateLoginScrollFade);
     setTimeout(updateLoginScrollFade, 100);
+}
+
+function initVpnScrollFade() {
+    const scroller = document.getElementById('vpn-scroll');
+    if (!scroller) return;
+    scroller.addEventListener('scroll', updateVpnScrollFade, { passive: true });
+    setTimeout(updateVpnScrollFade, 100);
+}
+
+function updateAllPanelScrollFades() {
+    updateLoginScrollFade();
+    updateVpnScrollFade();
 }
 
 function showLoginError(msg) {
@@ -216,6 +286,7 @@ function resetVpnConnectionUI() {
         badge.classList.remove('connected-badge');
     }
     updateVerifyExitButton();
+    setTimeout(() => { if (window.fetchPublicLocation) window.fetchPublicLocation(); }, 500);
 }
 
 function applyConnectedUI(status) {
@@ -224,6 +295,9 @@ function applyConnectedUI(status) {
     btnInner?.classList.add('connected');
     btnOuter?.classList.add('connected-ring');
     statusDot?.classList.add('active');
+    
+    // Fetch public IP after connection establishes
+    setTimeout(() => { if (window.fetchPublicLocation) window.fetchPublicLocation(); }, 3000);
 
     let displayStatus = status;
     if (status.includes('|')) {
@@ -251,6 +325,8 @@ function applyConnectedUI(status) {
     updateExitViaUI();
     updateVerifyExitButton();
     playVideo('/videos/Connected.mp4');
+    setTimeout(updateVpnScrollFade, 100);
+    setTimeout(updateVpnScrollFade, 550);
 }
 
 function updateExitViaUI() {
@@ -289,6 +365,7 @@ function showExitTestResult(ok, title, detail) {
     titleEl.className = 'text-[10px] font-bold uppercase tracking-wider ' + (ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400');
     titleEl.innerText = title;
     detailEl.innerText = detail;
+    setTimeout(updateVpnScrollFade, 50);
 }
 
 function updateVerifyExitButton() {
@@ -296,6 +373,7 @@ function updateVerifyExitButton() {
     if (!btn) return;
     const show = isConnected && (currentMode === 'exit-via' || currentExitNodeID);
     btn.classList.toggle('hidden', !show);
+    if (show) setTimeout(updateVpnScrollFade, 50);
 }
 
 async function restoreVpnState() {
@@ -338,6 +416,7 @@ function showVpnAfterLogin(playLoginVideo = true) {
             if (el) el.innerText = displayNameOnly(user);
         }).catch(() => {});
     }
+    setTimeout(updateVpnScrollFade, 100);
 }
 
 function showLoginView() {
@@ -348,6 +427,7 @@ function showLoginView() {
     loginLoadingState?.classList.add('hidden');
     loginLoadingState?.classList.remove('flex');
     resetVpnConnectionUI();
+    setAuthMode('signin');
     playVideo('/videos/login.mp4');
     loadSavedAccounts();
     setTimeout(updateLoginScrollFade, 50);
@@ -357,6 +437,8 @@ function cancelLogin() {
     loginLoadingState?.classList.add('hidden');
     loginLoadingState?.classList.remove('flex');
     loginFormPanel?.classList.remove('hidden');
+    const loadingText = document.getElementById('login-loading-text');
+    if (loadingText) loadingText.innerText = 'Authenticating with portal...';
 }
 
 function setVpnActionsBusy(busy) {
@@ -407,7 +489,7 @@ async function loadSavedAccounts() {
             return;
         }
 
-        panel.classList.remove('hidden');
+        panel.classList.toggle('hidden', authMode === 'create');
         list.innerHTML = accounts.map(acct => {
             const name = displayNameOnly(acct.display_name || acct.email);
             const initials = accountInitials(name);
@@ -448,9 +530,14 @@ window.showNewAccountForm = async function () {
     } catch (_) {}
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
+    const nameInput = document.getElementById('register-name');
+    const confirmInput = document.getElementById('register-confirm');
     if (emailInput) emailInput.value = '';
     if (passwordInput) passwordInput.value = '';
-    emailInput?.focus();
+    if (nameInput) nameInput.value = '';
+    if (confirmInput) confirmInput.value = '';
+    setAuthMode('create');
+    nameInput?.focus();
 };
 
 window.switchToAccount = async function (email) {
@@ -520,6 +607,7 @@ window.loginUser = function () {
             closeAdminConsole(false);
             window.go.main.App.PrepareAdminSession?.().catch(() => {});
             loadSavedAccounts();
+            setAuthMode('signin');
             showVpnAfterLogin();
         } else {
             showLoginError(result.replace(/^Error:\s*/, ''));
@@ -528,6 +616,60 @@ window.loginUser = function () {
     }).catch(err => {
         if (loginBtn) loginBtn.disabled = false;
         showLoginError('Login failed: ' + err);
+        cancelLogin();
+    });
+};
+
+window.createAccountUser = function () {
+    const name = document.getElementById('register-name')?.value?.trim();
+    const email = document.getElementById('email')?.value?.trim();
+    const password = document.getElementById('password')?.value || '';
+    const confirm = document.getElementById('register-confirm')?.value || '';
+
+    if (!name || !email || !password) {
+        showLoginError('Please enter your name, email, and password.');
+        return;
+    }
+    if (password.length < 6) {
+        showLoginError('Password must be at least 6 characters.');
+        return;
+    }
+    if (password !== confirm) {
+        showLoginError('Passwords do not match.');
+        return;
+    }
+
+    hideLoginError();
+    loginFormPanel?.classList.add('hidden');
+    loginLoadingState?.classList.remove('hidden');
+    loginLoadingState?.classList.add('flex');
+    const loadingText = document.getElementById('login-loading-text');
+    if (loadingText) loadingText.innerText = 'Creating your account...';
+    if (loginBtn) loginBtn.disabled = true;
+
+    if (!window.go?.main?.App?.CreateAccount) {
+        showLoginError('Account creation requires the desktop backend.');
+        cancelLogin();
+        if (loginBtn) loginBtn.disabled = false;
+        return;
+    }
+
+    window.go.main.App.CreateAccount(name, email, password).then(result => {
+        if (loginBtn) loginBtn.disabled = false;
+        if (result.startsWith('Success')) {
+            saveRememberEmail(email);
+            closeAdminConsole(false);
+            window.go.main.App.PrepareAdminSession?.().catch(() => {});
+            loadSavedAccounts();
+            setAuthMode('signin');
+            showVpnAfterLogin();
+        } else {
+            showLoginError(result.replace(/^Error:\s*/, ''));
+            cancelLogin();
+        }
+    }).catch(err => {
+        if (loginBtn) loginBtn.disabled = false;
+        showLoginError('Could not create account: ' + err);
         cancelLogin();
     });
 };
@@ -678,6 +820,7 @@ window.openModal = function (id) {
     const modal = document.getElementById(id);
     const backdrop = document.getElementById('modal-backdrop');
     if (!modal || !backdrop) return;
+    if (id === 'location-modal') loadExitNodes();
     backdrop.classList.remove('hidden');
     modal.classList.remove('hidden');
     setTimeout(() => {
@@ -714,29 +857,72 @@ window.selectRoutingMode = function (mode, name) {
     const activeLocationText = document.getElementById('active-location');
     if (activeLocationText) activeLocationText.innerText = name;
 
-    const container = document.getElementById('exit-nodes-container');
-    if (mode === 'exit-via') {
-        container?.classList.remove('hidden');
-    } else {
-        container?.classList.add('hidden');
+    if (mode !== 'exit-via') {
         window.closeModal('location-modal');
     }
 };
 
 let allNodes = [];
-window.loadExitNodes = async function () {
+let exitNodesLoading = false;
+
+function updateExitNodeHint() {
+    const hint = document.getElementById('exit-node-hint');
+    if (!hint) return;
+    if (exitNodesLoading) {
+        hint.textContent = 'Refreshing…';
+        hint.className = 'text-[10px] text-gray-400 font-semibold';
+        return;
+    }
+    if (allNodes.length > 0) {
+        hint.textContent = allNodes.length + ' available';
+        hint.className = 'text-[10px] text-emerald-500 font-semibold';
+        return;
+    }
+    hint.textContent = 'None found';
+    hint.className = 'text-[10px] text-amber-500 font-semibold';
+}
+
+window.refreshExitNodes = async function () {
+    await loadExitNodes(true);
+};
+
+window.loadExitNodes = async function (fromRefresh) {
+    if (exitNodesLoading) return;
+    exitNodesLoading = true;
+    const btn = document.getElementById('exit-nodes-refresh-btn');
+    const icon = document.getElementById('exit-nodes-refresh-icon');
+    if (btn) btn.disabled = true;
+    icon?.classList.add('animate-spin');
+    updateExitNodeHint();
+    const list = document.getElementById('exit-nodes-list');
+    if (list && (fromRefresh || !allNodes.length)) {
+        list.innerHTML = '<div class="text-center py-4 text-xs text-gray-400">Loading exit nodes…</div>';
+    }
     try {
         if (window.go?.main?.App?.ListExitNodesJSON) {
             const jsonStr = await window.go.main.App.ListExitNodesJSON();
             allNodes = JSON.parse(jsonStr);
             if (allNodes.length > 0 && allNodes[0]._error) {
                 console.error('Exit node load error:', allNodes[0]._error);
+                if (list) {
+                    list.innerHTML = '<div class="text-center py-4 text-xs text-amber-500">' +
+                        'Could not load exit nodes: ' + allNodes[0]._error + '</div>';
+                }
                 allNodes = [];
+            } else {
+                renderNodes(allNodes);
             }
-            renderNodes(allNodes);
         }
     } catch (e) {
         console.error(e);
+        if (list) {
+            list.innerHTML = '<div class="text-center py-4 text-xs text-amber-500">Failed to load exit nodes.</div>';
+        }
+    } finally {
+        exitNodesLoading = false;
+        if (btn) btn.disabled = false;
+        icon?.classList.remove('animate-spin');
+        updateExitNodeHint();
     }
 };
 
@@ -753,16 +939,23 @@ function renderNodes(nodes) {
     const list = document.getElementById('exit-nodes-list');
     if (!list) return;
     if (!nodes || nodes.length === 0) {
-        list.innerHTML = '<div class="text-center py-4 text-xs text-gray-400">No exit nodes available.</div>';
+        list.innerHTML = '<div class="text-center py-4 text-xs text-gray-400 leading-relaxed">' +
+            'No exit nodes available.<br><br>' +
+            'On your phone: turn <strong>Run as exit node</strong> ON, tap <strong>Connect</strong>, and keep it connected.<br><br>' +
+            'Then tap <strong>Refresh</strong> above.</div>';
         return;
     }
     let html = '';
     for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i];
         const label = n.label || n.device_name;
+        const sub = n.device_name && n.label && n.device_name !== n.label ? n.device_name : (n.country_code ? n.country_code + ' exit' : '');
+        const status = (n.status || 'offline').toLowerCase() === 'online' ? 'Online' : (n.status || 'Offline');
+        const statusClass = status === 'Online' ? 'text-emerald-500' : 'text-gray-400';
         html += `<div onclick="selectExitNode('${n.id}', '${label.replace(/'/g, "\\'")}')" class="p-3 rounded-xl border border-gray-150 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition">`;
         html += `<p class="text-sm font-bold text-gray-900 dark:text-white">${label}</p>`;
-        html += `<p class="text-[10px] text-emerald-500 mt-1">${n.status}</p>`;
+        if (sub) html += `<p class="text-[10px] text-gray-400 mt-0.5">${sub}</p>`;
+        html += `<p class="text-[10px] ${statusClass} mt-1">${status}</p>`;
         html += '</div>';
     }
     list.innerHTML = html;
@@ -965,6 +1158,12 @@ function initAdminRpcBridge() {
             showLoginView();
             return;
         }
+        if (data.type === 'mscale-admin-request-create-account') {
+            closeAdminConsole(false);
+            showLoginView();
+            setAuthMode('create');
+            return;
+        }
         if (data.type === 'mscale-admin-logout') {
             logoutUser();
             return;
@@ -1030,12 +1229,36 @@ window.dismissUpdateBanner = function () {
     try { localStorage.setItem('mscale_update_dismissed', pendingUpdateUrl); } catch (_) {}
 };
 
+window.fetchPublicLocation = async function() {
+    const textEl = document.getElementById('public-location-text');
+    if (!textEl) return;
+    textEl.innerText = 'Fetching...';
+    setTimeout(async () => {
+        try {
+            const res = await fetch('https://ipwho.is/');
+            const data = await res.json();
+            if (data && data.city && data.country) {
+                textEl.innerText = `${data.city}, ${data.country}`;
+                textEl.style.color = '#4338CA'; // Indigo-700
+            } else {
+                textEl.innerText = 'Location Unknown';
+            }
+        } catch (e) {
+            textEl.innerText = 'Location Unknown';
+        }
+    }, 3000);
+};
+
 document.addEventListener('DOMContentLoaded', () => {
+    window.fetchPublicLocation();
     initTheme();
     initAdminRpcBridge();
     restoreRememberEmail();
     loadSavedAccounts();
     initLoginScrollFade();
+    initVpnScrollFade();
+    window.addEventListener('resize', updateAllPanelScrollFades);
+    setAuthMode('signin');
 
     const dnsToggle = document.getElementById('setting-dns-toggle');
     const dnsDropdownContainer = document.getElementById('setting-dns-dropdown-container');

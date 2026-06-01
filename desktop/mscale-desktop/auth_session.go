@@ -367,3 +367,13 @@ func (a *App) RemoveSavedAccount(email string) string {
 	_ = os.Remove(sessionPathForEmail(email))
 	return "Success"
 }
+
+func (a *App) getSessionToken() string {
+	urlObj, _ := url.Parse(apiURL("/"))
+	for _, cookie := range a.httpClient.Jar.Cookies(urlObj) {
+		if cookie.Name == "mscale_session" {
+			return cookie.Value
+		}
+	}
+	return ""
+}

@@ -21,14 +21,14 @@ type ACLRule struct {
 
 func HandleACLs(db *sql.DB, auth *AuthHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, err := auth.GetSession(r)
+		session, err := auth.GetSession(r)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		if r.Method == http.MethodGet {
-			rows, err := db.Query("SELECT id, source_ip, dest_ip, port, action, created_at FROM acls ORDER BY created_at DESC")
+			rows, err := db.Query("SELECT id, source_ip, dest_ip, port, action, created_at FROM acls WHERE user_id = ? ORDER BY created_at DESC", session.UserID)
 			if err != nil {
 				http.Error(w, "Database error", http.StatusInternalServerError)
 				return
@@ -66,8 +66,8 @@ func HandleACLs(db *sql.DB, auth *AuthHandler) http.HandlerFunc {
 			rule.Action = strings.ToUpper(rule.Action)
 
 			_, err := db.Exec(
-				"INSERT INTO acls (id, source_ip, dest_ip, port, action) VALUES (?, ?, ?, ?, ?)",
-				rule.ID, rule.SourceIP, rule.DestIP, rule.Port, rule.Action,
+				"INSERT INTO acls (id, user_id, source_ip, dest_ip, port, action) VALUES (?, ?, ?, ?, ?, ?)",
+				rule.ID, session.UserID, rule.SourceIP, rule.DestIP, rule.Port, rule.Action,
 			)
 			if err != nil {
 				http.Error(w, "Database error", http.StatusInternalServerError)
@@ -91,7 +91,7 @@ func HandleACLDelete(db *sql.DB, auth *AuthHandler) http.HandlerFunc {
 			return
 		}
 		
-		_, err := auth.GetSession(r)
+		session, err := auth.GetSession(r)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -104,7 +104,7 @@ func HandleACLDelete(db *sql.DB, auth *AuthHandler) http.HandlerFunc {
 		}
 		id := parts[3]
 
-		_, err = db.Exec("DELETE FROM acls WHERE id = ?", id)
+		_, err = db.Exec("DELETE FROM acls WHERE id = ? AND user_id = ?", id, session.UserID)
 		if err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			return

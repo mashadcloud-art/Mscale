@@ -76,7 +76,7 @@ func (h *AuthHandler) UpdateDevicePublicKey(w http.ResponseWriter, r *http.Reque
 		removeWGPeerByPublicKey(oldPublicKey.String)
 	}
 	if overlayIP.Valid && overlayIP.String != "" {
-		_ = syncWGPeer(overlayIP.String, req.PublicKey, "")
+		_ = h.syncHubPeerForDevice(req.DeviceID, overlayIP.String, req.PublicKey)
 	}
 
 	writeJSON(w, http.StatusOK, DeviceUpdateKeyResponse{

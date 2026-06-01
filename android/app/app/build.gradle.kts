@@ -12,8 +12,8 @@ android {
         applicationId = "com.mscale.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 13
-        versionName = "1.0.12"
+        versionCode = 17
+        versionName = "1.0.16"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -17,6 +17,8 @@ class MscaleVpnService : VpnService() {
     private val teardownLock = Any()
     @Volatile
     private var isTearingDown = false
+    @Volatile
+    private var connectGeneration = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -64,14 +66,20 @@ class MscaleVpnService : VpnService() {
             return START_NOT_STICKY
         }
 
-        synchronized(teardownLock) { isTearingDown = false }
+        synchronized(teardownLock) {
+            if (vpnInterface != null) {
+                disconnectSyncLocked()
+            }
+            isTearingDown = false
+        }
+        val generation = ++connectGeneration
 
         val shareExit = intent?.getBooleanExtra(EXTRA_SHARE_EXIT, false) ?: false
         promoteToForeground(shareExit)
 
         val token = intent?.getStringExtra(EXTRA_TOKEN).orEmpty()
         val exitNodeId = intent?.getStringExtra(EXTRA_EXIT_NODE_ID).orEmpty()
-        val shareCountry = intent?.getStringExtra(EXTRA_SHARE_COUNTRY).orEmpty().ifEmpty { "IN" }
+        val shareCountry = intent?.getStringExtra(EXTRA_SHARE_COUNTRY).orEmpty().ifEmpty { PhoneUtils.readCountryCode(this) }
         val exitMode = intent?.getStringExtra(EXTRA_EXIT_MODE).orEmpty().ifEmpty { "proxy" }
         val dnsServer = intent?.getStringExtra(EXTRA_DNS_SERVER).orEmpty().ifEmpty { "8.8.8.8" }
         val deviceName = intent?.getStringExtra(EXTRA_DEVICE_NAME)
@@ -86,7 +94,7 @@ class MscaleVpnService : VpnService() {
 
         Thread {
             try {
-                if (isTearingDown) return@Thread
+                if (isTearingDown || generation != connectGeneration) return@Thread
 
                 val storageDir = filesDir.absolutePath
                 val overlayIp = if (shareExit) {
@@ -96,9 +104,10 @@ class MscaleVpnService : VpnService() {
                 }
                 if (overlayIp.isEmpty()) {
                     Log.e(TAG, "PrepareMesh failed: ${controller.getLastError()}")
-                    finishService()
+                    finishService(notifyFailure = true, error = controller.getLastError())
                     return@Thread
                 }
+                if (generation != connectGeneration) return@Thread
 
                 val useExit = !shareExit && exitNodeId.isNotEmpty()
                 val builder = Builder()
@@ -124,22 +133,27 @@ class MscaleVpnService : VpnService() {
                 } else {
                     builder.addRoute("100.64.0.0", 10)
                 }
-                builder.addDnsServer(dnsServer)
+                // Exit-share uses mesh-only routes; public DNS on the VPN breaks the phone's own internet.
+                if (!shareExit) {
+                    builder.addDnsServer(dnsServer)
+                }
                 builder.addSearchDomain("mscale")
                 builder.setSession("Mscale VPN")
 
                 vpnInterface = builder.establish()
                 if (vpnInterface == null) {
                     Log.e(TAG, "VPN establish() returned null")
-                    finishService()
+                    finishService(notifyFailure = true, error = "Could not open VPN interface")
                     return@Thread
                 }
+                if (generation != connectGeneration) return@Thread
 
                 val err = controller.startTunnel(vpnInterface!!.detachFd().toLong())
+                if (generation != connectGeneration) return@Thread
                 if (err.isNotEmpty()) {
                     Log.e(TAG, "StartTunnel failed: $err")
                     disconnectSync()
-                    finishService()
+                    finishService(notifyFailure = true, error = err)
                 } else {
                     val registeredId = controller.getDeviceID()
                     if (registeredId.isNotEmpty()) {
@@ -148,23 +162,45 @@ class MscaleVpnService : VpnService() {
                     if (shareExit) {
                         ExitCommandPoller.start(this@MscaleVpnService)
                     }
+                    isRunning = true
+                    sendVpnStateBroadcast(connected = true, error = "")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "VPN error", e)
                 disconnectSync()
-                finishService()
+                finishService(notifyFailure = true, error = e.message ?: "VPN error")
             }
         }.start()
 
         return START_NOT_STICKY
     }
 
+    private fun sendVpnStateBroadcast(connected: Boolean, error: String = "") {
+        val action = when {
+            connected -> ACTION_VPN_CONNECTED
+            error.isNotEmpty() -> ACTION_VPN_FAILED
+            else -> ACTION_VPN_DISCONNECTED
+        }
+        val intent = Intent(action).setPackage(packageName)
+        if (error.isNotEmpty()) {
+            intent.putExtra(EXTRA_VPN_ERROR, error)
+        }
+        sendBroadcast(intent)
+    }
+
     /** Stop WireGuard first, then close VPN fd — prevents native crash on disconnect. */
     private fun disconnectSync() {
         synchronized(teardownLock) {
-            if (isTearingDown) return
-            isTearingDown = true
+            disconnectSyncLocked()
         }
+    }
+
+    private fun disconnectSyncLocked() {
+        if (isTearingDown && vpnInterface == null) return
+        isTearingDown = true
+        connectGeneration++
+        isRunning = false
+        ExitCommandPoller.stop()
         try {
             VpnControllerHolder.instance.setSocketProtector(null)
             VpnControllerHolder.instance.disconnect()
@@ -180,15 +216,20 @@ class MscaleVpnService : VpnService() {
     }
 
     private fun performDisconnect() {
-        ExitCommandPoller.stop()
         Thread {
             disconnectSync()
-            finishService()
+            finishService(notifyFailure = false)
         }.start()
     }
 
-    private fun finishService() {
+    private fun finishService(notifyFailure: Boolean, error: String = "") {
         mainHandler.post {
+            isRunning = false
+            if (notifyFailure) {
+                sendVpnStateBroadcast(connected = false, error = error)
+            } else {
+                sendVpnStateBroadcast(connected = false)
+            }
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
@@ -204,10 +245,16 @@ class MscaleVpnService : VpnService() {
 
     override fun onDestroy() {
         disconnectSync()
+        isRunning = false
+        sendVpnStateBroadcast(connected = false)
         super.onDestroy()
     }
 
     companion object {
+        @Volatile
+        var isRunning: Boolean = false
+            private set
+
         const val ACTION_DISCONNECT = "com.mscale.app.DISCONNECT"
         const val EXTRA_TOKEN = "session_token"
         const val EXTRA_EXIT_NODE_ID = "exit_node_id"
@@ -216,6 +263,10 @@ class MscaleVpnService : VpnService() {
         const val EXTRA_SHARE_COUNTRY = "share_country"
         const val EXTRA_EXIT_MODE = "exit_mode"
         const val EXTRA_DNS_SERVER = "dns_server"
+        const val ACTION_VPN_CONNECTED = "com.mscale.app.VPN_CONNECTED"
+        const val ACTION_VPN_DISCONNECTED = "com.mscale.app.VPN_DISCONNECTED"
+        const val ACTION_VPN_FAILED = "com.mscale.app.VPN_FAILED"
+        const val EXTRA_VPN_ERROR = "vpn_error"
         private const val TAG = "MscaleVpnService"
     }
 }
