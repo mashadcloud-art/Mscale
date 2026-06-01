@@ -130,18 +130,14 @@ func applyHubExitRouting(clientOverlay, clientPubKey, exitOverlay, exitPubKey st
 		return err
 	}
 	_ = ensureHubExitForwarding()
-	if activeExitClientIP != "" && activeExitClientIP != clientOverlay {
-		clearClientExitPolicy(activeExitClientIP)
-	}
+	clearExitClientRouteLocked(clientOverlay)
 	if err := ensureClientExitPolicy(clientOverlay, exitOverlay); err != nil {
 		return err
 	}
 	if err := ensureMobileExitPath(); err != nil {
 		return err
 	}
-	activeExitPeer = exitB64
-	activeExitOverlay = exitOverlay
-	activeExitClientIP = clientOverlay
+	setActiveExitClientLocked(clientOverlay, exitB64, exitOverlay)
 	return nil
 }
 

@@ -446,13 +446,10 @@ func (h *AuthHandler) AdminRouteDevice(w http.ResponseWriter, r *http.Request) {
 
 	case "mesh", "":
 		exitRouteMu.Lock()
-		if activeExitClientIP != "" {
-			var clientOverlay sql.NullString
-			_ = h.DB.QueryRow(`SELECT overlay_ip FROM devices WHERE id = ?`, req.DeviceID).Scan(&clientOverlay)
-			if clientOverlay.Valid && clientOverlay.String == activeExitClientIP {
-				clearClientExitPolicy(activeExitClientIP)
-				activeExitClientIP = ""
-			}
+		var clientOverlay sql.NullString
+		_ = h.DB.QueryRow(`SELECT overlay_ip FROM devices WHERE id = ? AND user_id = ?`, req.DeviceID, session.UserID).Scan(&clientOverlay)
+		if clientOverlay.Valid && clientOverlay.String != "" {
+			clearExitClientRouteLocked(clientOverlay.String)
 		}
 		exitRouteMu.Unlock()
 		_, _ = h.DB.Exec(
@@ -504,9 +501,7 @@ func (h *AuthHandler) AdminRouteDevice(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hub forwarding failed", "details": err.Error()})
 			return
 		}
-		if activeExitClientIP != "" && activeExitClientIP != clientOverlay {
-			clearClientExitPolicy(activeExitClientIP)
-		}
+		clearExitClientRouteLocked(clientOverlay)
 		if err := ensureClientExitPolicy(clientOverlay, exitOverlay); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hub exit policy failed", "details": err.Error()})
 			return
@@ -516,9 +511,7 @@ func (h *AuthHandler) AdminRouteDevice(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		exitB64, _ := normalizeWGPublicKey(exitPubKey)
-		activeExitPeer = exitB64
-		activeExitOverlay = exitOverlay
-		activeExitClientIP = clientOverlay
+		setActiveExitClientLocked(clientOverlay, exitB64, exitOverlay)
 		_, _ = h.DB.Exec(
 			`UPDATE devices SET tunnel_mode = 'exit-via', exit_node_id = ? WHERE id = ? AND user_id = ?`,
 			req.ExitNodeID, req.DeviceID, session.UserID,

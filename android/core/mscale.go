@@ -21,21 +21,21 @@ type VpnController struct {
 	disconnectMu sync.Mutex
 	isRunning   bool
 	stopHeart   chan struct{}
-	
+
 	apiClient   *api.Client
 	wgEngine    *wg.Engine
 	tunDevice   tun.Device
-	
-	status      string
-	lastError   string
-	assignedIP  string
-	deviceID    string
-	exitNodeID  string
-	exitShare   bool
-	exitCountry string
-	exitMode    string
-	protectFD   func(fd int) bool
-	serverKey   string
+
+	status       string
+	lastError    string
+	assignedIP   string
+	deviceID     string
+	exitNodeID   string
+	exitShare    bool
+	exitCountry  string
+	exitMode     string
+	protectFD    func(fd int) bool
+	serverKey    string
 	sessionToken string
 }
 
@@ -43,12 +43,12 @@ func NewVpnController() *VpnController {
 	return &VpnController{status: "Disconnected"}
 }
 
-func (c *VpnController) GetDeviceID() string      { return c.deviceID }
-func (c *VpnController) GetLastError() string       { return c.lastError }
-func (c *VpnController) GetAssignedIP() string  { return c.assignedIP }
-func (c *VpnController) GetStatus() string      { return c.status }
-func (c *VpnController) UsesExitNode() bool     { return strings.TrimSpace(c.exitNodeID) != "" }
-func (c *VpnController) IsExitShare() bool      { return c.exitShare }
+func (c *VpnController) GetDeviceID() string     { return c.deviceID }
+func (c *VpnController) GetLastError() string      { return c.lastError }
+func (c *VpnController) GetAssignedIP() string     { return c.assignedIP }
+func (c *VpnController) GetStatus() string         { return c.status }
+func (c *VpnController) UsesExitNode() bool        { return strings.TrimSpace(c.exitNodeID) != "" }
+func (c *VpnController) IsExitShare() bool         { return c.exitShare }
 
 // SocketProtector is implemented by Android VpnService to protect outbound exit-forward sockets.
 type SocketProtector interface {
@@ -105,7 +105,7 @@ func (c *VpnController) prepareMesh(token, deviceName, storageDir, exitNodeID st
 	}
 
 	c.wgEngine = wg.NewEngine(privateKey, c.protectFD)
-	
+
 	tunnelMode := "mesh"
 	if exitNodeID != "" {
 		tunnelMode = "exit-via"
@@ -142,13 +142,9 @@ func (c *VpnController) prepareMesh(token, deviceName, storageDir, exitNodeID st
 		return ""
 	}
 
+	// Defer hub exit routing until WireGuard is up (StartTunnel).
 	if exitNodeID != "" {
-		if err := c.apiClient.ActivateExitRoute(deviceID, exitNodeID); err != nil {
-			c.lastError = err.Error()
-			return ""
-		}
 		c.exitNodeID = exitNodeID
-		c.apiClient.EnsureExitRouteByKey(pubHex, c.assignedIP, exitNodeID)
 	}
 
 	if shareExit {
@@ -203,11 +199,11 @@ func (t *androidTun) Write(bufs [][]byte, offset int) (int, error) {
 	}
 	return len(bufs), nil
 }
-func (t *androidTun) MTU() (int, error)              { return t.mtu, nil }
-func (t *androidTun) Name() (string, error)          { return "tun0", nil }
-func (t *androidTun) Events() <-chan tun.Event       { return t.events }
-func (t *androidTun) Close() error                   { return t.file.Close() }
-func (t *androidTun) BatchSize() int                 { return 1 }
+func (t *androidTun) MTU() (int, error)         { return t.mtu, nil }
+func (t *androidTun) Name() (string, error)     { return "tun0", nil }
+func (t *androidTun) Events() <-chan tun.Event  { return t.events }
+func (t *androidTun) Close() error              { return t.file.Close() }
+func (t *androidTun) BatchSize() int            { return 1 }
 
 func (c *VpnController) StartTunnel(fd int64) string {
 	c.lastError = ""
@@ -249,6 +245,11 @@ func (c *VpnController) StartTunnel(fd int64) string {
 
 	if c.exitNodeID != "" {
 		pubHex := hex.EncodeToString(c.wgEngine.PrivateKey.PublicKey()[:])
+		if err := c.apiClient.ActivateExitRoute(c.deviceID, c.exitNodeID); err != nil {
+			c.Disconnect()
+			c.lastError = "exit route activation failed: " + err.Error()
+			return c.lastError
+		}
 		c.apiClient.EnsureExitRouteByKey(pubHex, c.assignedIP, c.exitNodeID)
 	}
 
@@ -309,7 +310,7 @@ func (c *VpnController) Disconnect() error {
 func (c *VpnController) startHeartbeat() {
 	c.stopHeartbeat()
 	c.stopHeart = make(chan struct{})
-	
+
 	if c.apiClient != nil && c.deviceID != "" {
 		c.apiClient.PostStatus(c.deviceID, "active")
 	}

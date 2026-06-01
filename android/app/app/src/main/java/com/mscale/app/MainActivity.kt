@@ -352,9 +352,15 @@ class MainActivity : ComponentActivity() {
     private fun requestVpnPermission() {
         if (shareAsExit) {
             // sharing as exit — mesh routing only
-        } else if (shareExitMode == "exit_node" && selectedExitNodeId.isEmpty()) {
-            Toast.makeText(this, "Select an exit server first (Servers tab)", Toast.LENGTH_LONG).show()
-            return
+        } else if (shareExitMode == "exit_node") {
+            val effectiveId = selectedExitNodeId.ifEmpty {
+                WakePrefs.getSelectedExitNodeId(this)
+            }
+            if (effectiveId.isEmpty()) {
+                Toast.makeText(this, "Select an exit server first (Servers tab)", Toast.LENGTH_LONG).show()
+                return
+            }
+            selectedExitNodeId = effectiveId
         }
         val intent = VpnService.prepare(this)
         if (intent != null) {

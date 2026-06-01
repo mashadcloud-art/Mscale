@@ -7,14 +7,6 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
-	"sync"
-)
-
-var (
-	exitRouteMu         sync.Mutex
-	activeExitPeer      string // wg public key (base64) for current exit node peer
-	activeExitOverlay   string // overlay IP of exit node (India)
-	activeExitClientIP  string // overlay IP of client using exit-via
 )
 
 type ActivateExitRouteRequest struct {
@@ -86,7 +78,6 @@ func (h *AuthHandler) ActivateExitRoute(w http.ResponseWriter, r *http.Request) 
 	defer exitRouteMu.Unlock()
 
 	if req.ExitNodeID != "hub" {
-		// Bug 1: exit peer needs /32 + 0.0.0.0/1 + 128.0.0.0/1 (not /32 alone).
 		if err := syncExitNodePeer(exitOverlay, exitPubKey); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{
 				"error":   "could not configure exit peer on hub",
@@ -110,9 +101,9 @@ func (h *AuthHandler) ActivateExitRoute(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	if activeExitClientIP != "" && activeExitClientIP != clientOverlay {
-		clearClientExitPolicy(activeExitClientIP)
-	}
+
+	// Re-activate same client: clear only this overlay's policy, not other users.
+	clearExitClientRouteLocked(clientOverlay)
 
 	if req.ExitNodeID != "hub" {
 		if err := ensureClientExitPolicy(clientOverlay, exitOverlay); err != nil {
@@ -130,7 +121,6 @@ func (h *AuthHandler) ActivateExitRoute(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	} else {
-		clearClientExitPolicy(clientOverlay)
 		if err := ensureHubSelfExitNAT(); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{
 				"error":   "hub NAT setup failed",
@@ -140,9 +130,7 @@ func (h *AuthHandler) ActivateExitRoute(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	activeExitPeer = exitB64
-	activeExitOverlay = exitOverlay
-	activeExitClientIP = clientOverlay
+	setActiveExitClientLocked(clientOverlay, exitB64, exitOverlay)
 
 	_, _ = h.DB.Exec(
 		`UPDATE devices SET tunnel_mode = 'exit-via', exit_node_id = ? WHERE id = ? AND user_id = ?`,
@@ -151,9 +139,9 @@ func (h *AuthHandler) ActivateExitRoute(w http.ResponseWriter, r *http.Request) 
 	NotifyDevicesChanged()
 
 	writeJSON(w, http.StatusOK, map[string]string{
-		"message":     "exit routing active",
-		"exit_ip":     exitOverlay,
-		"client_ip":   clientOverlay,
+		"message":   "exit routing active",
+		"exit_ip":   exitOverlay,
+		"client_ip": clientOverlay,
 	})
 }
 
@@ -200,9 +188,8 @@ func (h *AuthHandler) reapplyExitRouteForDevice(deviceID, exitNodeID, userID str
 		return err
 	}
 	_ = ensureHubExitForwarding()
-	if activeExitClientIP != "" && activeExitClientIP != clientOverlay {
-		clearClientExitPolicy(activeExitClientIP)
-	}
+
+	clearExitClientRouteLocked(clientOverlay)
 
 	if exitNodeID != "hub" {
 		if err := ensureClientExitPolicy(clientOverlay, exitOverlay); err != nil {
@@ -212,14 +199,11 @@ func (h *AuthHandler) reapplyExitRouteForDevice(deviceID, exitNodeID, userID str
 			return err
 		}
 	} else {
-		clearClientExitPolicy(clientOverlay)
 		if err := ensureHubSelfExitNAT(); err != nil {
 			return err
 		}
 	}
-	activeExitPeer = exitB64
-	activeExitOverlay = exitOverlay
-	activeExitClientIP = clientOverlay
+	setActiveExitClientLocked(clientOverlay, exitB64, exitOverlay)
 	return nil
 }
 
@@ -249,13 +233,15 @@ func (h *AuthHandler) DeactivateExitRoute(w http.ResponseWriter, r *http.Request
 	exitRouteMu.Lock()
 	defer exitRouteMu.Unlock()
 
-	// Bug 2 cleanup only: remove client policy rule. Keep India /1 routes on exit peer.
-	if activeExitClientIP != "" {
-		clearClientExitPolicy(activeExitClientIP)
-		activeExitClientIP = ""
-	}
-
 	if req.DeviceID != "" {
+		var clientOverlay string
+		err := h.DB.QueryRow(
+			`SELECT overlay_ip FROM devices WHERE id = ? AND user_id = ?`,
+			req.DeviceID, session.UserID,
+		).Scan(&clientOverlay)
+		if err == nil && clientOverlay != "" {
+			clearExitClientRouteLocked(clientOverlay)
+		}
 		_, _ = h.DB.Exec(
 			`UPDATE devices SET tunnel_mode = 'mesh' WHERE id = ? AND user_id = ?`,
 			req.DeviceID, session.UserID,
@@ -288,7 +274,6 @@ func ensureHubExitForwarding() error {
 	if _, err := runSudo("sysctl", "-w", "net.ipv4.ip_forward=1"); err != nil {
 		return err
 	}
-	// Strict rp_filter drops forwarded VPN traffic asymmetrically.
 	_, _ = runSudo("sysctl", "-w", "net.ipv4.conf.all.rp_filter=2")
 	_, _ = runSudo("sysctl", "-w", "net.ipv4.conf.wg0.rp_filter=2")
 	return nil
